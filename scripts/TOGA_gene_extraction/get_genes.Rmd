@@ -1,0 +1,93 @@
+---
+title: "get_genes.sh"
+author: "Julia Levinstein"
+date: "2026-09-24"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+## script to extract selected genes from the "codon_aln.fa.gz" file downloaded from TOGAII website
+
+```{bash, eval=FALSE}
+#!/bin/bash
+#SBATCH -J TOGA
+#SBATCH --mail-type FAIL
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 9:00:00
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH -n 4
+#SBATCH --cpus-per-task=8
+
+
+#1.Conda environment set up
+
+eval "$(conda shell.bash hook)"
+CONDA_ENV_PATH="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/conda_envs/bio_env"
+conda activate "$CONDA_ENV_PATH"
+
+#2.Variables set up
+CLADE="Meliphagidae"
+GENES="autosomal_genes" #autosomal, ancestral or neo
+DATA_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating"
+GENE_FILE="$DATA_DIR/$CLADE/$GENES/chr4_list.txt" #list containing genes which you want to extract
+SPECIES_LIST_FILE="$DATA_DIR/$CLADE/$GENES/Species_list" #list containing species for which you want to extract the codon file from
+
+
+#3.Read each species specified in the $SPECIES_LIST_FILE
+while IFS= read -r SPECIES || [[ -n "$SPECIES" ]]; do
+    [[ -z "$SPECIES" ]] && continue
+    echo "Processing Species: $SPECIES"
+
+    # Navigate to the specific data path for the species
+    TARGET_DIR="$DATA_DIR/$CLADE/$GENES/Species/$SPECIES"
+    if ! cd "$TARGET_DIR"; then
+        echo "ERROR: Could not enter directory $TARGET_DIR"
+        continue
+    fi
+
+    # 1. Pre-process alignment
+    CLEAN_FASTA="cleaned_codon_aln.fa"
+    if [[ -f "codon_aln.fa" ]]; then
+        echo "Found codon_aln.fa. Creating $CLEAN_FASTA..."
+        sed -e '/^>/ s/ //g' \
+            -e '/^[^>]/ s/-//g' \
+            -e '/^[^>]/ s/[Xx]//g' \
+            -e '/^[^>]/ s/ //g' codon_aln.fa > "$CLEAN_FASTA"
+
+        # 2. Loop through genes and RENAME HEADERS
+        while IFS= read -r GENE || [[ -n "$GENE" ]]; do
+            [[ -z "$GENE" ]] && continue
+
+            # Debug: Check if the pattern actually exists in the file
+            if grep -q "#${GENE}#.*QUERY" "$CLEAN_FASTA"; then
+                echo "Match found for Gene: $GENE. Extracting..."
+
+                #header is Species, filename is Gene
+                seqkit grep -r -p "#${GENE}#.*QUERY" "$CLEAN_FASTA" | \
+                 sed "s/^>.*/>${SPECIES}/" > "${GENE}"
+
+                if [[ -s "${GENE}" ]]; then
+                    echo "Successfully created: ${GENE} with header >${SPECIES}"
+                else
+                    echo "WARNING: ${GENE} was created but is EMPTY."
+                fi
+            else
+                echo "Pattern .*${GENE}.*QUERY not found in $CLEAN_FASTA"
+            fi
+        done < "$GENE_FILE"
+
+    else
+        echo "ERROR: codon_aln.fa not found in $TARGET_DIR"
+    fi
+
+done < "$SPECIES_LIST_FILE"
+
+echo "--- Script Finished ---"
+```
+
+### In the end you should have the gene file as \$GENE and the header should be \>Species_name. Gene sequences will most likely have multiple fastas for different isoforms. Filtering of isoforms is done in the "remove_duplicates.sh" script.

@@ -1,0 +1,55 @@
+---
+title: "remove_duplicates.sh"
+author: "Julia Levinstein"
+date: "2026-09-24"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+## script to keep only the longest isoform of the gene extracted from the "codon_aln.fa.gz" file from TOGAII
+
+### This script calls for the python script"long_isoform.py"
+
+```{bash, eval = false}
+
+#!/bin/bash -l
+#SBATCH -J remove_duplicates
+#SBATCH --mail-type FAIL,END
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 2-00:00:00
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH -n 4
+#SBATCH --cpus-per-task=8
+
+
+#1.Variables set up
+GENES="autosomal_genes" #neo, ancestral or autosomal
+CLADE="Meliphagidae"
+DATA_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project"
+WORKING_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating"
+GENE_LIST="$WORKING_DIR/$CLADE/$GENES/chr4_list.txt" #gene list txt file containing the genes you would like to remove the duplicates
+SPECIES_LIST="$WORKING_DIR/$CLADE/$GENES/Species_list" #species list txt file containing the species in which you would like the script to run on
+
+
+
+
+for SPECIES in $(cat "$SPECIES_LIST"); do
+    for GENE in $(cat "$GENE_LIST"); do
+        # Check if the file exists
+        if [ -f "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}" ]; then
+            # Count headers; only run if count is greater than 1 (if there are more than one isoform)
+            if [ $(grep -c ">" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}") -gt 1 ]; then
+                python3 "$DATA_DIR/Psittaciformes/Scripts/long_isoform_v2.py" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}" > "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}_filter"
+
+               mv "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}_filter" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/${GENE}"
+            fi
+        fi
+    done
+done
+
+```
