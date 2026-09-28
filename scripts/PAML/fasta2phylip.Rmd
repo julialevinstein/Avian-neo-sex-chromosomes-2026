@@ -1,0 +1,53 @@
+---
+title: "fasta2phylip.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Python script to create a phylip formated file from a fasta file. Necessary because PAML/codeml only takes phylip formated files. 
+
+```{python, eval=FALSE}
+import sys
+import os
+from Bio import AlignIO
+
+# Main directory is the first argument
+main_directory = sys.argv[1]
+
+# Loop through every subdirectory (genes) and transform .fasta file into a phylip file
+for root, dirs, files in os.walk(main_directory):
+    for filename in files:
+        if filename.endswith("_NT.fasta-gb.fa"):
+            input_file = os.path.join(root, filename)
+            output_file = input_file.replace("_NT.fasta-gb.fa", ".phy")
+
+            try:
+                alignment = AlignIO.read(input_file, "fasta")
+            except Exception as e:
+                print(f"Skipping {filename}: {e}")
+                continue
+
+            # Calculate space needed between sequence ID and sequence for PAML/PHYLIP format
+            max_label_len = max(len(record.id) for record in alignment)
+            column_width = max_label_len + 10
+
+            # Write the PAML / relaxed PHYLIP file directly
+            with open(output_file, "w") as f:
+                f.write(f" {len(alignment)}  {alignment.get_alignment_length()}\n")
+
+                for record in alignment:
+                    padded_name = record.id.ljust(column_width)
+                    # Convert sequence to string and replace '!' with '-'
+                    clean_seq = str(record.seq).replace("!", "-")
+                    f.write(f"{padded_name}{clean_seq}\n")
+
+            print(f"Successfully converted: {input_file} -> {output_file}")
+
+```
+
