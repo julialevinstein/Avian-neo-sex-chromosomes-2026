@@ -1,0 +1,71 @@
+---
+title: "run_macse.sh"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to run MACSE for a codon-aware alignment. 
+
+```{bash, eval=FALSE}
+#!/bin/bash -l
+#SBATCH -J MACSE_auto
+#SBATCH --mail-type FAIL,END
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 2-00:00:00
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH --mem=16G
+#SBATCH -n 1
+#SBATCH --cpus-per-task=4
+
+#configuration
+
+GENES="autosomal_genes" #ancestral_genes or neo_genes
+CLADE="Meliphagidae"
+INPUT_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/$CLADE/$GENES/PAML_constraint_str"
+MACSE="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Scripts/macse.jar"
+
+
+
+#load java
+module load openjdk/21.0.3_9
+
+# Loop through each gene directory inside the INPUT_DIR
+for GENE_DIR in "$INPUT_DIR"/*/; do
+    [ -d "$GENE_DIR" ] || continue
+
+    # Get the gene name from the directory name
+    GENE=$(basename "$GENE_DIR")
+
+    # Define the input file path (GeneName/GeneName.fasta)
+    FASTA="$GENE_DIR/${GENE}.fasta"
+
+    # Check if the input file exists before proceeding
+    if [ ! -f "$FASTA" ]; then
+        echo "Warning: $FASTA not found, skipping."
+        continue
+    fi
+
+    # Check if alignment already exists (saving output back into the gene directory)
+    if [ -f "$GENE_DIR/${GENE}_NT.fasta" ]; then
+        echo "Skipping $GENE: Alignment already exists."
+        continue
+    fi
+
+    echo "Aligning $GENE..."
+    java -jar "$MACSE" -prog alignSequences \
+         -seq "$FASTA" \
+         -out_NT "$GENE_DIR/${GENE}_NT.fasta" \
+         -out_AA "$GENE_DIR/${GENE}_AA.fasta"
+done
+
+
+
+```
+
