@@ -1,0 +1,141 @@
+---
+title: "gfftofasta.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to get extract the gene fasta sequences from the gff file produced by Exonerate.
+
+```{python, eval=FALSE}
+---
+title: "gfftofasta.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Python script to get a gff file (produced by Exonerate) and generate the fasta files of the genes annotated by the Exonerate run
+
+
+
+import gffpandas.gffpandas as gffpd
+import pandas as pd
+import pyfaidx
+import os
+from Bio.Seq import Seq
+
+def extract_sequence_pyfaidx(fasta_file, seq_id, start, end):
+    """Extract sequence using Pyfaidx"""
+    fasta = pyfaidx.Fasta(fasta_file)
+    extracted = fasta[seq_id][start-1:end]
+    return str(extracted)
+
+def ensure_directory(path):
+    """Ensure directory exists, create if it doesn't"""
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+def main():
+    clade = "Sturnidae"
+    base_species_dir = '/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating'
+    genes_file_path = f'{base_species_dir}/{clade}/ancestral_genes/Acr_tri_chrZ_list.txt'
+    output_root = f'{base_species_dir}/{clade}/ancestral_genes/gene_sequences'
+
+    ensure_directory(output_root)
+    clade_species_root = f'{base_species_dir}/{clade}/ancestral_genes/Species'
+
+    with open(genes_file_path, 'r') as f:
+        gene_list = [line.strip() for line in f if line.strip()]
+
+    # Loop through each species in the root directory
+    for species in os.listdir(clade_species_root):
+        species_path = os.path.join(clade_species_root, species)
+
+        # Only process directories
+        if not os.path.isdir(species_path):
+            continue
+
+        # Define W/Z chromosome paths
+        chrom = 'Z'
+        annotation_path = f'{species_path}/results/{species}_{chrom}_cds_mappings_chr_Z.gff'
+        fasta_path = f"{species_path}/data/{species}_chr{chrom}.fasta"
+
+        # Check if W chromosome files exist; skip species if they don't
+        if not os.path.exists(annotation_path) or not os.path.exists(fasta_path):
+            print(f"Skipping {species}: Z chromosome files (GFF or FASTA) not found.")
+            continue
+
+        # Create species-specific subdirectory in output
+        species_output_dir = os.path.join(output_root, species)
+        ensure_directory(species_output_dir)
+
+        print(f"Processing species: {species}")
+
+        try:
+            annotation = gffpd.read_gff3(annotation_path)
+        except Exception as e:
+            print(f"Error reading GFF for {species}: {e}")
+            continue
+
+        for gene_name in gene_list:
+            gene_rows = annotation.df[annotation.df['attributes'].str.contains(gene_name, na=False)]
+
+            if gene_rows.empty:
+                continue
+
+            first_row = gene_rows.iloc[0]
+            seq_id_var = first_row['seq_id']
+            start_var = first_row['start']
+            end_var = first_row['end']
+            strand_var = str(first_row['strand']).strip()
+
+            filtered_rows = annotation.df[
+                (annotation.df['type'] == 'exon') &
+                (annotation.df['seq_id'] == seq_id_var) &
+                (annotation.df['start'] >= start_var) &
+                (annotation.df['end'] <= end_var)
+            ].copy()
+
+            is_negative = strand_var == "-"
+            filtered_rows = filtered_rows.sort_values('start', ascending=not is_negative)
+
+            final_fasta_seq = ""
+            for index, row in filtered_rows.iterrows():
+                try:
+                    exon_seq = extract_sequence_pyfaidx(fasta_path, row['seq_id'], int(row['start']), int(row['end']))
+                    if is_negative:
+                        exon_seq = str(Seq(exon_seq).reverse_complement())
+                    final_fasta_seq += exon_seq
+                except Exception as e:
+                    print(f"Error extracting sequence for {gene_name} in {species}: {e}")
+                    continue
+
+            if not final_fasta_seq:
+                continue
+
+            # Save to the species-specific subdirectory
+            out_file_path = os.path.join(species_output_dir, f"{gene_name}_{species}_{chrom}.fasta")
+            fasta_header = f">{species}_{chrom}"
+
+            with open(out_file_path, 'w') as f_out:
+                f_out.write(f"{fasta_header}\n")
+                for i in range(0, len(final_fasta_seq), 60):
+                    f_out.write(final_fasta_seq[i:i+60] + "\n")
+
+if __name__ == "__main__":
+    main()
+
+```
+
