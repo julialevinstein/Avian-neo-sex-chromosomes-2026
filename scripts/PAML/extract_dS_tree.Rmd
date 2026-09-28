@@ -1,0 +1,146 @@
+---
+title: "extract_dS_tree.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to get dS tree when the output tree is not directly created by codeml. This happens when running model=0. dS values are given in a table and the corresponding branches are labeled by numbers. We will have to first get the species newick tree and the corresponding branches and then extract dS values from the table to create our dS tree. In model=1 and model=2, a dS tree is automatically generated and its much easier to be extracted (use the "save_dS_tree.sh" script to do so).
+
+```{python, eval=FALSE}
+import re
+from pathlib import Path
+from ete3 import Tree
+
+# =============================================================================
+# 1. PARSER FUNCTION
+# =============================================================================
+def parse_paml_ds_tree(paml_text):
+    # Split text at the table section
+    if "dN & dS for each branch" not in paml_text:
+        raise ValueError("Missing 'dN & dS for each branch' section in file.")
+
+    header_text, table_text = paml_text.split("dN & dS for each branch", 1)
+
+    # Extract all Newick trees from the header section
+    trees = re.findall(r'\([^\n;]+;', header_text)
+    if len(trees) < 2:
+        raise ValueError("Could not find enough trees in PAML header.")
+
+    # First tree is ALWAYS the numbered tree (1, 2, 3...)
+    num_tree_str = trees[0]
+    # LAST tree before the dN/dS table is ALWAYS the species-named tree
+    named_tree_str = trees[-1]
+
+    t_num = Tree(num_tree_str)
+    t_named = Tree(named_tree_str)
+
+    # Extract order of leaves to build exact ID-to-Species mapping
+    num_leaves = [leaf.name.strip() for leaf in t_num.get_leaves()]
+    named_leaves = [leaf.name.strip() for leaf in t_named.get_leaves()]
+
+    if len(num_leaves) != len(named_leaves):
+        raise ValueError(f"Leaf count mismatch: {len(num_leaves)} numbered vs {len(named_leaves)} named.")
+
+    id_to_species = dict(zip(num_leaves, named_leaves))
+
+    # Label internal nodes on numbered tree to match PAML's branch table notation (13..14, etc.)
+    max_tip_id = max(int(i) for i in num_leaves if i.isdigit())
+    internal_node_counter = max_tip_id + 1
+    for node in t_num.traverse("preorder"):
+        if not node.is_leaf():
+            node.name = str(internal_node_counter)
+            internal_node_counter += 1
+
+    # Parse dS values line-by-line from the table
+    ds_rates = {}
+    for line in table_text.splitlines():
+        if "tree length" in line or "summary" in line.lower():
+            break
+        if ".." in line:
+            parts = line.strip().split()
+            if len(parts) >= 7 and ".." in parts[0]:
+                branch_key = parts[0]
+                try:
+                    ds_rates[branch_key] = float(parts[6])  # Column 6 is strictly dS
+                except (ValueError, IndexError):
+                    continue
+
+    if not ds_rates:
+        raise ValueError("Could not parse branch dS values from table.")
+
+    # Reconstruct final tree structure
+    ds_tree = Tree(num_tree_str)
+
+    # Assign identical internal node IDs to match PAML branch keys
+    int_id = max_tip_id + 1
+    for node in ds_tree.traverse("preorder"):
+        if not node.is_leaf():
+            node.name = str(int_id)
+            int_id += 1
+
+    # Replace numerical tip IDs with actual Taxon names & update dS branch lengths
+    for node in ds_tree.traverse("preorder"):
+        if node.is_root():
+            continue
+
+        parent = node.up
+        branch_key = f"{parent.name}..{node.name}"
+
+        if node.is_leaf():
+            clean_id = node.name.strip()
+            if clean_id in id_to_species:
+                node.name = id_to_species[clean_id]
+
+        if branch_key in ds_rates:
+            node.dist = ds_rates[branch_key]
+
+    # Clear internal node names so numbers don't print in the final Newick output
+    for node in ds_tree.traverse():
+        if not node.is_leaf():
+            node.name = ""
+
+    return ds_tree
+
+
+# =============================================================================
+# 2. MAIN BATCH PROCESSING LOOP
+# =============================================================================
+BASE_DIR = Path(".")
+
+for gene_dir in BASE_DIR.iterdir():
+    if gene_dir.is_dir():
+        gene = gene_dir.name
+        paml_file = gene_dir / f"{gene}_mlc"
+        out_tree_file = gene_dir / f"{gene}_dS_tree.nwk"
+
+        if not paml_file.exists():
+            alt_paml_file = gene_dir / f"{gene}.mlc"
+            if alt_paml_file.exists():
+                paml_file = alt_paml_file
+            else:
+                continue
+
+        try:
+            with open(paml_file, "r") as f:
+                paml_text = f.read()
+
+            ds_tree = parse_paml_ds_tree(paml_text)
+
+            # Export clean Newick format with species names and dS lengths
+            with open(out_tree_file, "w") as out_f:
+                out_f.write(ds_tree.write(format=5) + "\n")
+
+            print(f"[{gene}] Successfully created {out_tree_file.name}")
+
+        except Exception as e:
+            print(f"[{gene}] ERROR: {e}")
+
+```
+
