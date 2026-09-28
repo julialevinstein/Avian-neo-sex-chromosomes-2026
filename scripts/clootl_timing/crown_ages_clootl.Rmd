@@ -1,0 +1,153 @@
+---
+title: "clootl_crown_ages"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+    
+---
+
+
+# R script that I used to extract the timing information from the clootl R package.
+
+
+## Configuration
+```{r}
+#clade dating using clootl R package
+
+#load packages
+library(clootl)
+library(ape)
+library(phytools)
+library(phylocanvas)
+
+
+
+#2025 database 
+taxonomy25 <- clootl_data$taxonomies$year2025
+
+```
+
+
+## 1. Parrots
+```{r}
+parrot_species <- taxonomy25$SCI_NAME[(taxonomy25$ORDER) == "Psittaciformes"]
+parrot_tree <- extractTree(species= parrot_species, label_type="scientific", taxonomy_year = 2025)
+
+clade_crown_age <- max(nodeHeights(parrot_tree))
+
+cat("The crown age of Psittaciformes is:", clade_crown_age, "million years ago.\n")
+
+parrot_citations <- getCitations(parrot_tree)
+
+```
+
+
+
+#2. Threskiornithidae
+
+```{r}
+threskiornithidae_species <- taxonomy25$SCI_NAME[(taxonomy25$FAMILY) == "Threskiornithidae (Ibises and Spoonbills)"]
+threskiornithidae_tree <- extractTree(species=threskiornithidae_species, label_type = "scientific", taxonomy_year=2025)
+
+clade_crown_age <- max(nodeHeights(threskiornithidae_tree))
+cat("The crown age of Threskiornithidae is:" , clade_crown_age, "million years ago.\n")
+threskiornithidae_citations <- getCitations(threskiornithidae_tree)
+
+```
+
+
+
+#3. Sylviida
+```{r}
+sylviida_families <- c(
+  "Alaudidae (Larks)",       
+  "Hirundinidae (Swallows)",    
+  "Cettiidae (Bush Warblers and Allies)",       
+  "Phylloscopidae (Leaf Warblers)",  
+  "Acrocephalidae (Reed Warblers and Allies)",   
+  "Locustellidae (Grassbirds and Allies)",   
+  "Cisticolidae (Cisticolas and Allies)",    
+  "Macrosphenidae (African Warblers)",  
+  "Pycnonotidae (Bulbuls)",    
+  "Sylviidae (Sylviid Warblers and Allies)",      
+  "Paradoxornithidae (Parrotbills)",
+  "Zosteropidae (White-eyes, Yuhinas, and Allies)",    
+  "Timaliidae (Tree-Babblers, Scimitar-Babblers, and Allies)",       
+  "Pellorneidae (Ground Babblers and Allies)",    
+  "Leiothrichidae (Laughingthrushes and Allies)" ,
+  "Panuridae (Bearded Reedling)",
+  "Timaliidae (Tree-Babblers, Scimitar-Babblers, and Allies)",
+  "Nicatoridae (Nicators)"
+)
+
+sylviida_species <- taxonomy25$SCI_NAME[taxonomy25$FAMILY %in% sylviida_families]
+
+sylviida_tree <- extractTree(species=sylviida_species, label_type = "scientific", taxonomy_year = 2025)
+clade_crown_age <- max(nodeHeights(sylviida_tree))
+cat ("The crown age of Sylviida is:", clade_crown_age, "million years ago.\n")
+sylviida_citations <- getCitations(sylviida_tree)
+```
+
+
+
+#4. Meliphagidae
+
+
+```{r}
+#for Meliphagiade I only want the clade in which neo-sex fusions have been identified
+
+#first extract whole Meliphagidae tree
+
+meliphagidae_species <- taxonomy25$SCI_NAME[(taxonomy25$FAMILY) == "Meliphagidae (Honeyeaters)"]
+full_meliphagidae_tree <- extractTree(species= meliphagidae_species, label_type = "scientific", taxonomy_year = 2025)
+
+#visualize tree
+phylocanvas(full_meliphagidae_tree)
+
+#neo-sex fusion clade
+neo_sex_clade <- c("Philemon", "Myzomela", "Entomyzon", "Phylidonyris")
+neo_sex_species <- meliphagidae_species[grepl(paste0("^", neo_sex_clade, collapse="|"), meliphagidae_species)]
+
+#prune tree to keep only species with neo sex chromosomes
+meliphagidae_tree <- keep.tip(full_meliphagidae_tree, tip = neo_sex_species)
+
+#visualize tree
+plot(meliphagidae_tree, show.tip.label = TRUE)
+axisPhylo()
+
+clade_crown_age <- max(nodeHeights(meliphagidae_tree))
+cat("The crown age for the neo-sex Meliphagidae tree is:", clade_crown_age, "million years ago.\n")
+
+meliphagidae_citations <- getCitations(meliphagidae_tree)
+
+```
+
+
+#5. Columbidae  family
+```{r}
+
+#since I dont know when the fusion happened this is a bit more tricky. I know Columba livia does not have the fusion, so I will calulate a max age of the fusion (split between Caloenas and Columba)
+
+target_species <- c("Columba livia", "Caloenas nicobarica")
+col_tree <- extractTree(species=target_species)
+clade_crown_age <- max(nodeHeights(col_tree))
+cat(clade_crown_age)
+
+```
+
+## 6. Age of split between any two species
+
+```{r, eval=FALSE}
+target_species <- c("sp1", "sp2") #add here species name
+target_tree <- extractTree(species=target_species)
+clade_crown_age <- max(nodeHeights(target_tree))
+cat(clade_crown_age)
+
+```
+
+
