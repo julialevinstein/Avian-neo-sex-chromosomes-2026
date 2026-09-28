@@ -1,0 +1,282 @@
+---
+title: "extract_segments.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to extract different segments of the dS tree. This will be useful for calibrating the fusion estimation based on the different segments of the tree. 
+
+```{python, eval=FALSE}
+from pathlib import Path
+from ete3 import Tree
+import pandas as pd
+import numpy as np
+
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+BASE_DIR = Path(".")
+
+# Outgroups used to identify the ingroup
+ALL_OUTGROUPS = ["Fal_per", "Ans_ans", "Str_cam"]
+
+# Taxon used to root each gene tree
+ROOTING_PRIORITY = ["Str_cam"]
+
+# The two internal calibration/checkpoint taxa
+OLDER_OUTGROUP = "Ans_ans"
+YOUNGER_OUTGROUP = "Fal_per"
+
+# Names used for the output columns
+SEGMENT_1_NAME = "Stem_dS_anser_falcon"
+SEGMENT_2_NAME = "Stem_dS_falcon_crown"
+
+# Optional descriptive names for printing/comments
+SEGMENT_1_DESCRIPTION = "Anser-split -> Falcon-split"
+SEGMENT_2_DESCRIPTION = "Falcon-split -> crown"
+
+# Input files
+INPUT_FILES = [
+    "auto_genes_values_with_lsv.tsv"
+]
+
+# Output suffix
+OUTPUT_SUFFIX = "_with_segments.tsv"
+
+
+# =============================================================================
+# TREE UTILITIES
+# =============================================================================
+
+def reroot_tree(tree, priority_list):
+    leaf_names = set(tree.get_leaf_names())
+
+    for taxon in priority_list:
+        if taxon in leaf_names:
+            tree.set_outgroup(tree.search_nodes(name=taxon)[0])
+            return taxon
+
+    return None
+
+
+def path_distance(descendant_node, ancestor_node):
+    dist = 0.0
+    node = descendant_node
+
+    while node != ancestor_node:
+        dist += node.dist
+        node = node.up
+
+        if node is None:
+            raise ValueError(
+                "ancestor_node not found in ancestry of descendant_node"
+            )
+
+    return dist
+
+
+def is_ancestor_of(candidate_ancestor, node):
+    """Return True if candidate_ancestor lies on the path from node to root."""
+    n = node
+
+    while n is not None:
+        if n == candidate_ancestor:
+            return True
+        n = n.up
+
+    return False
+
+
+# =============================================================================
+# SEGMENT EXTRACTION
+# =============================================================================
+
+def extract_two_segment_stem(
+    tree,
+    ingroup_tips,
+    older_outgroup,
+    younger_outgroup
+):
+    """
+    Split the stem between the older outgroup split and the ingroup crown
+    using the younger outgroup split as an internal checkpoint.
+
+    For example:
+
+        older split -------- younger split -------- crown
+             |                     |                  |
+             |<---- segment 1 ---->|<-- segment 2 -->|
+
+    Returns:
+        (segment_1, segment_2, ok)
+
+    where ok=False means that the gene tree does not support the expected
+    nesting of the three nodes.
+    """
+
+    # -------------------------------------------------------------------------
+    # Ingroup crown
+    # -------------------------------------------------------------------------
+
+    crown_node = (
+        tree.get_common_ancestor(ingroup_tips)
+        if len(ingroup_tips) > 1
+        else tree.search_nodes(name=ingroup_tips[0])[0]
+    )
+
+    # -------------------------------------------------------------------------
+    # Older and younger calibration/checkpoint nodes
+    # -------------------------------------------------------------------------
+
+    node_older = tree.get_common_ancestor(
+        [older_outgroup] + ingroup_tips
+    )
+
+    node_younger = tree.get_common_ancestor(
+        [younger_outgroup] + ingroup_tips
+    )
+
+    # -------------------------------------------------------------------------
+    # Check whether both nodes are distinct
+    # -------------------------------------------------------------------------
+
+    if node_older == node_younger:
+        return 0.0, path_distance(crown_node, node_younger), False
+
+    # -------------------------------------------------------------------------
+    # Check expected nesting:
+    #
+    # older split -> younger split -> crown
+    # -------------------------------------------------------------------------
+
+    if not is_ancestor_of(node_older, node_younger):
+        return None, None, False
+
+    # -------------------------------------------------------------------------
+    # Calculate the two path segments
+    # -------------------------------------------------------------------------
+
+    segment_1 = path_distance(
+        node_younger,
+        node_older
+    )
+
+    segment_2 = path_distance(
+        crown_node,
+        node_younger
+    )
+
+    return segment_1, segment_2, True
+
+
+# =============================================================================
+# PROCESS ONE GENE FILE
+# =============================================================================
+
+def process_gene_file(values_file, gene_col="Gene"):
+
+    df = pd.read_csv(values_file, sep="\t")
+
+    segment_1_list = []
+    segment_2_list = []
+    ok_list = []
+
+    for gene in df[gene_col]:
+
+        tree_file = BASE_DIR / gene / f"{gene}_dS_tree.nwk"
+
+        if not tree_file.exists():
+            segment_1_list.append(np.nan)
+            segment_2_list.append(np.nan)
+            ok_list.append(False)
+            continue
+
+        tree = Tree(str(tree_file))
+
+        # Root tree
+        reroot_tree(tree, ROOTING_PRIORITY)
+
+        all_tips = tree.get_leaf_names()
+
+        # Identify which outgroups are present
+        outgroups_present = [
+            t for t in ALL_OUTGROUPS
+            if t in all_tips
+        ]
+
+        # Everything else is considered ingroup
+        ingroup_tips = [
+            t for t in all_tips
+            if t not in outgroups_present
+        ]
+
+        try:
+            segment_1, segment_2, ok = extract_two_segment_stem(
+                tree=tree,
+                ingroup_tips=ingroup_tips,
+                older_outgroup=OLDER_OUTGROUP,
+                younger_outgroup=YOUNGER_OUTGROUP
+            )
+
+        except Exception:
+            segment_1, segment_2, ok = None, None, False
+
+        segment_1_list.append(segment_1)
+        segment_2_list.append(segment_2)
+        ok_list.append(ok)
+
+    # -------------------------------------------------------------------------
+    # Add output columns
+    # -------------------------------------------------------------------------
+
+    df[SEGMENT_1_NAME] = segment_1_list
+    df[SEGMENT_2_NAME] = segment_2_list
+    df["segments_resolved"] = ok_list
+
+    n_ok = sum(ok_list)
+
+    print(
+        f"{values_file}: "
+        f"{n_ok}/{len(df)} genes had a resolvable two-segment split"
+    )
+
+    # -------------------------------------------------------------------------
+    # Save
+    # -------------------------------------------------------------------------
+
+    out_file = values_file.replace(
+        ".tsv",
+        OUTPUT_SUFFIX
+    )
+
+    df.to_csv(
+        out_file,
+        sep="\t",
+        index=False
+    )
+
+    print(f">>> Saved {out_file}")
+
+    return df
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+if __name__ == "__main__":
+
+    for f in INPUT_FILES:
+        process_gene_file(f)
+
+```
+
