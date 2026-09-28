@@ -1,0 +1,60 @@
+---
+title: "run_exonerate.sh"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to run Exonerate agains a reference CDS to identify the genes present in the neo region of the sex chromosome
+
+
+```{bash, eval=FALSE}
+#!/bin/bash -l
+#SBATCH -J exonerate
+#SBATCH --mail-type FAIL,DONE
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 2-00:00:00
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH --mem=4G
+#SBATCH -n 1
+#SBATCH --cpus-per-task=1
+
+
+#Configuration
+WORKING_DIR=/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating
+SPECIES=Pte_gut
+CLADE=Pterocliformes
+CHR=4 #Z or W
+GENES=autosomal_genes
+FUSION_CHR=4
+
+
+
+REF_FILE="$WORKING_DIR/Ref/Ref_chr${FUSION_CHR}_cds_filter.fasta"
+TARGET_FILE="$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/${SPECIES}_chr${CHR}.fasta"
+OUTPUT_FILE="${SPECIES}_${CHR}_cds_mappings_chr_${FUSION_CHR}.gff"
+
+CONDA_ENV_PATH="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/conda_envs/bio_env"
+conda activate "$CONDA_ENV_PATH"
+
+exonerate \
+  --model est2genome \
+  --percent 65 \
+  --softmasktarget true \
+  --softmaskquery false \
+  --showtargetgff true \
+  --showalignment true \
+  --minintron 2 \
+  --maxintron 50000 \
+  "$REF_FILE" \
+  "$TARGET_FILE" > "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/results/$OUTPUT_FILE"
+
+```
+
