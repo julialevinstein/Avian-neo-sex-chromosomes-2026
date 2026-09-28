@@ -1,0 +1,64 @@
+---
+title: "run_gblocks.sh"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to run "Gblocks". This will clean the alignments, removing gap-rich regions. Important to use the codon-aware flag (-t=c) so that the reading frame doesnt get disrupted.
+
+```{bash, eval=FALSE}
+#!/bin/bash -l
+#SBATCH -J gBlocks
+#SBATCH --mail-type FAIL,DONE
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 2-00:00:00
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH --mem=4G
+#SBATCH -n 1
+#SBATCH --cpus-per-task=1
+#SBATCH --output=gblocks.out
+
+
+
+eval "$(conda shell.bash hook)"
+CONDA_ENV_PATH="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/conda_envs/bio_env"
+conda activate "$CONDA_ENV_PATH"
+
+WORK_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating"
+CLADE="Meliphagidae"
+GENES="autosomal_genes"
+
+
+TARGET_DIR="$WORK_DIR/$CLADE/$GENES/PAML_constraint_str"
+
+
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Directory $TARGET_DIR does not exist."
+    exit 1
+fi
+
+echo "Starting Gblocks run across subdirectories in $TARGET_DIR..."
+
+find "$TARGET_DIR" -type f -name "*_NT.fasta" | while read -r alignment_file; do
+    echo "Processing: $alignment_file"
+
+    # Run Gblocks
+    # Common flags:
+    #   -t=d (DNA) or -t=p (Protein) or -t=c (Codons)
+    # important to keep it codon-aware for PAML analysis
+    #   -b5=h (Allowed gap positions: n=none, h=half, a=all)
+    Gblocks "$alignment_file" -t=c -b5=h
+
+done
+
+
+```
+
