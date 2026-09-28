@@ -11,7 +11,7 @@ output:
 ---
 
 
-# Python script to create a constraint tree to run iqtree on. This will ensure that the outgroups always sit outside of the ingroup. 
+# Python script to create a constraint tree to run iqtree on. This will ensure that the outgroups always sit outside of the ingroup. It generates an "run_iqtree_constrained.sh" file with the commands to run iqtree on all the genes constrained trees. 
 
 
 
