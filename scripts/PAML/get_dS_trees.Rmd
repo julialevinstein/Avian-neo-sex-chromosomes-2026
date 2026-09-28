@@ -1,0 +1,313 @@
+---
+title: "get_dS_trees.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+
+
+# Python script to extract the dS tree from the mlc output produced by PAML. When using model=1 or model=2 the dS tree is automatically produced. However when using the option model=0 it is necessary to extract the dS values from the table and reconstruct a dS tree. This scripts first evaluates if the dS tree was automatically produced or not and then gets the dS tree accordingly.
+
+```{python, eval=FALSE}
+#!/usr/bin/env python3
+import re
+from pathlib import Path
+from ete3 import Tree
+
+
+# =============================================================================
+# 1. EXTRACT dS TREE DIRECTLY FROM PAML OUTPUT
+# =============================================================================
+
+def extract_ds_tree(paml_text):
+    """
+    Extract a dS tree when codeml has printed one directly.
+
+    Looks for:
+
+        dS tree:
+        <Newick tree>;
+
+    Returns the Newick string.
+    """
+
+    match = re.search(
+        r"dS tree:\s*\n?\s*(\([^;]+;)",
+        paml_text
+    )
+
+    if not match:
+        raise ValueError("Could not find dS tree in PAML output.")
+
+    return match.group(1).strip()
+
+
+# =============================================================================
+# 2. RECONSTRUCT dS TREE FROM dN & dS TABLE
+# =============================================================================
+
+def parse_paml_ds_tree(paml_text):
+
+    # -------------------------------------------------------------------------
+    # Check that the dN/dS table exists
+    # -------------------------------------------------------------------------
+
+    if "dN & dS for each branch" not in paml_text:
+        raise ValueError(
+            "Missing 'dN & dS for each branch' section in file."
+        )
+
+    header_text, table_text = paml_text.split(
+        "dN & dS for each branch",
+        1
+    )
+
+    # -------------------------------------------------------------------------
+    # Extract all Newick trees from the header section
+    # -------------------------------------------------------------------------
+
+    trees = re.findall(r'\([^\n;]+;', header_text)
+
+    if len(trees) < 2:
+        raise ValueError(
+            "Could not find enough trees in PAML header."
+        )
+
+    # First tree = numbered tree
+    num_tree_str = trees[0]
+
+    # Last tree before dN/dS table = species-named tree
+    named_tree_str = trees[-1]
+
+    t_num = Tree(num_tree_str)
+    t_named = Tree(named_tree_str)
+
+    # -------------------------------------------------------------------------
+    # Build exact ID -> species mapping
+    # -------------------------------------------------------------------------
+
+    num_leaves = [
+        leaf.name.strip()
+        for leaf in t_num.get_leaves()
+    ]
+
+    named_leaves = [
+        leaf.name.strip()
+        for leaf in t_named.get_leaves()
+    ]
+
+    if len(num_leaves) != len(named_leaves):
+        raise ValueError(
+            f"Leaf count mismatch: "
+            f"{len(num_leaves)} numbered vs "
+            f"{len(named_leaves)} named."
+        )
+
+    id_to_species = dict(
+        zip(num_leaves, named_leaves)
+    )
+
+    # -------------------------------------------------------------------------
+    # Label internal nodes on numbered tree
+    # -------------------------------------------------------------------------
+
+    max_tip_id = max(
+        int(i)
+        for i in num_leaves
+        if i.isdigit()
+    )
+
+    internal_node_counter = max_tip_id + 1
+
+    for node in t_num.traverse("preorder"):
+
+        if not node.is_leaf():
+            node.name = str(internal_node_counter)
+            internal_node_counter += 1
+
+    # -------------------------------------------------------------------------
+    # Parse dS values from branch table
+    # -------------------------------------------------------------------------
+
+    ds_rates = {}
+
+    for line in table_text.splitlines():
+
+        if "tree length" in line or "summary" in line.lower():
+            break
+
+        if ".." in line:
+
+            parts = line.strip().split()
+
+            if len(parts) >= 7 and ".." in parts[0]:
+
+                branch_key = parts[0]
+
+                try:
+                    # Column 6 = dS
+                    ds_rates[branch_key] = float(parts[6])
+
+                except (ValueError, IndexError):
+                    continue
+
+    if not ds_rates:
+        raise ValueError(
+            "Could not parse branch dS values from table."
+        )
+
+    # -------------------------------------------------------------------------
+    # Reconstruct final tree
+    # -------------------------------------------------------------------------
+
+    ds_tree = Tree(num_tree_str)
+
+    # Assign internal node IDs
+    int_id = max_tip_id + 1
+
+    for node in ds_tree.traverse("preorder"):
+
+        if not node.is_leaf():
+            node.name = str(int_id)
+            int_id += 1
+
+    # -------------------------------------------------------------------------
+    # Replace numerical tip IDs with species names
+    # and assign dS values to branches
+    # -------------------------------------------------------------------------
+
+    for node in ds_tree.traverse("preorder"):
+
+        if node.is_root():
+            continue
+
+        parent = node.up
+
+        branch_key = f"{parent.name}..{node.name}"
+
+        # Replace numerical tip ID with species name
+        if node.is_leaf():
+
+            clean_id = node.name.strip()
+
+            if clean_id in id_to_species:
+                node.name = id_to_species[clean_id]
+
+        # Assign dS as branch length
+        if branch_key in ds_rates:
+            node.dist = ds_rates[branch_key]
+
+    # -------------------------------------------------------------------------
+    # Remove internal node numbers
+    # -------------------------------------------------------------------------
+
+    for node in ds_tree.traverse():
+
+        if not node.is_leaf():
+            node.name = ""
+
+    return ds_tree.write(format=5)
+
+
+# =============================================================================
+# 3. MAIN PROCESSING LOOP
+# =============================================================================
+
+BASE_DIR = Path(".")
+
+for gene_dir in BASE_DIR.iterdir():
+
+    # Only process directories
+    if not gene_dir.is_dir():
+        continue
+
+    gene = gene_dir.name
+
+    # -------------------------------------------------------------------------
+    # Find PAML output file
+    # -------------------------------------------------------------------------
+
+    paml_file = gene_dir / f"{gene}_mlc"
+
+    if not paml_file.exists():
+
+        # Alternative naming convention
+        alt_paml_file = gene_dir / f"{gene}.mlc"
+
+        if alt_paml_file.exists():
+            paml_file = alt_paml_file
+
+        else:
+            print(
+                f"[{gene}] WARNING: No PAML output found. Skipping."
+            )
+            continue
+
+    # -------------------------------------------------------------------------
+    # Define output
+    # -------------------------------------------------------------------------
+
+    out_tree_file = gene_dir / f"{gene}_dS_tree.nwk"
+
+    # -------------------------------------------------------------------------
+    # Read PAML output
+    # -------------------------------------------------------------------------
+
+    try:
+
+        with open(paml_file, "r") as f:
+            paml_text = f.read()
+
+    except Exception as e:
+
+        print(
+            f"[{gene}] ERROR reading {paml_file.name}: {e}"
+        )
+        continue
+
+    # -------------------------------------------------------------------------
+    # Check whether codeml directly produced a dS tree
+    # -------------------------------------------------------------------------
+
+    if "dS tree:" in paml_text:
+
+        try:
+
+            ds_tree = extract_ds_tree(paml_text)
+
+            with open(out_tree_file, "w") as out_f:
+                out_f.write(ds_tree + "\n")
+
+            print(
+                f"[{gene}] dS tree found -> extracted directly."
+            )
+
+        except Exception as e:
+
+            print(
+                f"[{gene}] ERROR extracting dS tree: {e}"
+            )
+
+    # -------------------------------------------------------------------------
+    # Otherwise reconstruct dS tree from branch table
+    # -------------------------------------------------------------------------
+
+    else:
+
+        try:
+
+            ds_tree = parse_paml_ds_tree(paml_text)
+
+            with open(out_tree_file, "w") as out_f:
+                out_f.write(ds_tree + "\n")
+
+            print(
+                f"[{gene}] No dS tree found -> reconstructed from dS table."
+            )
+
+        except Exception as e:
+
+            print(
+                f"[{gene}] ERROR reconstructing dS tree: {e}"
+            )
+
+```
+
