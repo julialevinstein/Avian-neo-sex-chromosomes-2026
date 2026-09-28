@@ -1,0 +1,236 @@
+---
+title: "newick_utils.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script check for monophyly of trees. No need to run it, it is called for in "batch_label_trees.py"
+
+```{python, eval=FALSE}
+
+class Node:
+    __slots__ = ("name", "length", "children", "parent", "label")
+
+    def __init__(self, name=None, length=None):
+        self.name = name
+        self.length = length
+        self.children = []
+        self.parent = None
+        self.label = None
+
+    def is_leaf(self):
+        return len(self.children) == 0
+
+    def add_child(self, child):
+        child.parent = self
+        self.children.append(child)
+
+    def leaves(self):
+        if self.is_leaf():
+            return [self]
+        out = []
+        for c in self.children:
+            out.extend(c.leaves())
+        return out
+
+    def leaf_names(self):
+        return {n.name for n in self.leaves()}
+
+
+def parse_newick(s):
+    s = s.strip()
+    if s.endswith(";"):
+        s = s[:-1]
+    s = "".join(s.split())
+
+    pos = [0]
+
+    def parse_clade():
+        node = Node()
+        if s[pos[0]] == "(":
+            pos[0] += 1
+            while True:
+                child = parse_clade()
+                node.add_child(child)
+                if s[pos[0]] == ",":
+                    pos[0] += 1
+                    continue
+                elif s[pos[0]] == ")":
+                    pos[0] += 1
+                    break
+            name, length = parse_name_and_length()
+            node.name = name
+            node.length = length
+        else:
+            name, length = parse_name_and_length()
+            node.name = name
+            node.length = length
+        return node
+
+    def parse_name_and_length():
+        start = pos[0]
+        while pos[0] < len(s) and s[pos[0]] not in ",();":
+            pos[0] += 1
+        token = s[start:pos[0]].strip()
+        name = None
+        length = None
+        if ":" in token:
+            name_part, length_part = token.split(":", 1)
+            name = name_part.strip() or None
+            length_part = length_part.strip()
+            if "#" in length_part:
+                length_part = length_part.split("#")[0].strip()
+            length = float(length_part) if length_part else None
+        else:
+            name = token.strip() or None
+        return name, length
+
+    root = parse_clade()
+    return root
+
+
+def find_mrca(root, taxa):
+    """Return the MRCA node of a set of leaf names."""
+    taxa = set(taxa)
+    all_leaves = {leaf.name: leaf for leaf in root.leaves()}
+    missing = taxa - set(all_leaves.keys())
+    if missing:
+        raise ValueError(f"Taxa not found in tree: {missing}")
+
+    def ancestor_path(leaf_node):
+        path = []
+        n = leaf_node
+        while n is not None:
+            path.append(n)
+            n = n.parent
+        return path
+
+    paths = [ancestor_path(all_leaves[t]) for t in taxa]
+    common = set(paths[0])
+    for p in paths[1:]:
+        common &= set(p)
+    for node in paths[0]:
+        if node in common:
+            return node
+    raise RuntimeError("No common ancestor found -- tree may be malformed")
+
+
+def is_descendant(node, ancestor):
+    n = node
+    while n is not None:
+        if n is ancestor:
+            return True
+        n = n.parent
+    return False
+
+
+def reparent(node, new_parent, connecting_length):
+    old_parent = node.parent
+    if old_parent is not None:
+        old_parent.children = [c for c in old_parent.children if c is not node]
+        original_edge_length = node.length
+        reparent(old_parent, node, original_edge_length)
+    node.parent = new_parent
+    node.length = connecting_length
+    if new_parent is not None:
+        new_parent.children.append(node)
+
+
+def collapse_unary_nodes(root):
+    def _collapse(node):
+        node.children = [_collapse(c) for c in node.children]
+        while len(node.children) == 1:
+            only_child = node.children[0]
+            if node.length is not None and only_child.length is not None:
+                only_child.length = node.length + only_child.length
+            elif only_child.length is None:
+                only_child.length = node.length
+            only_child.parent = node.parent
+            return _collapse(only_child)
+        return node
+
+    return _collapse(root)
+
+
+def reroot_on_outgroup(root, outgroup_name):
+    """Reroots the tree on a given outgroup taxon or outgroup clade MRCA."""
+    if isinstance(outgroup_name, str):
+        outgroup_set = {outgroup_name}
+    else:
+        outgroup_set = set(outgroup_name)
+
+    all_leaves = {leaf.name: leaf for leaf in root.leaves()}
+    missing_ogs = outgroup_set - set(all_leaves.keys())
+    if missing_ogs:
+        raise ValueError(f"Outgroup(s) '{missing_ogs}' not found in tree.")
+
+    if len(outgroup_set) == 1:
+        target_node = all_leaves[next(iter(outgroup_set))]
+    else:
+        target_node = find_mrca(root, outgroup_set)
+
+    old_parent = target_node.parent
+
+    if old_parent is None:
+        return root
+
+    node_length = target_node.length if target_node.length is not None else 0.0
+    half = node_length / 2.0
+
+    old_parent.children = [c for c in old_parent.children if c is not target_node]
+
+    new_root = Node(name=None, length=None)
+    target_node.parent = new_root
+    target_node.length = half
+    new_root.children.append(target_node)
+
+    reparent(old_parent, new_root, half)
+
+    new_root = collapse_unary_nodes(new_root)
+    return new_root
+
+
+def check_outgroup_monophyly(root, outgroup_name, foreground_taxa):
+    """Verifies that none of the outgroup taxa fall inside the foreground MRCA clade."""
+    if isinstance(outgroup_name, str):
+        outgroup_set = {outgroup_name}
+    else:
+        outgroup_set = set(outgroup_name)
+
+    all_leaves = {leaf.name for leaf in root.leaves()}
+    missing_ogs = outgroup_set - all_leaves
+    if missing_ogs:
+        return False, None, None, f"Outgroup taxon/taxa '{missing_ogs}' not found in tree."
+
+    missing_fg = set(foreground_taxa) - all_leaves
+    if missing_fg:
+        return False, None, None, f"Foreground taxa not found in tree: {missing_fg}"
+
+    rerooted = reroot_on_outgroup(root, outgroup_set)
+
+    mrca = find_mrca(rerooted, foreground_taxa)
+    outgroup_leaves = [leaf for leaf in rerooted.leaves() if leaf.name in outgroup_set]
+
+    for og_leaf in outgroup_leaves:
+        if is_descendant(og_leaf, mrca):
+            return (
+                False,
+                rerooted,
+                mrca,
+                f"NON-MONOPHYLETIC even after rerooting on '{outgroup_set}': an outgroup "
+                f"({og_leaf.name}) falls within the foreground clade (genuine gene "
+                f"tree discordance -- ILS, introgression, paralogy -- not just an "
+                f"unrooted-tree display artifact). Needs manual review.",
+            )
+
+    return True, rerooted, mrca, "OK: monophyletic once rooted on the outgroup."
+
+```
+
