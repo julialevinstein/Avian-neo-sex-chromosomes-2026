@@ -1,0 +1,54 @@
+---
+title: "run_codeml.sh "
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to run codeml 
+
+```{bash, eval=FALSE}
+#!/bin/bash -l
+
+#SBATCH -J codeml         #job name
+#SBATCH --mail-type FAIL,END   #mail events (e.g. NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user Julia.Levinstein@campus.lmu.de
+#SBATCH -t 2-00:00:00         #booking time d-hh:mm:ss
+#SBATCH --clusters=biohpc_gen
+#SBATCH --partition=biohpc_gen_normal
+#SBATCH --nodelist=cm4r13c06s10
+#SBATCH -n 1
+#SBATCH --cpus-per-task=1
+
+
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate /dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/envs/phylogenetics
+
+MAIN_DIR=/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Meliphagidae/autosomal_genes/PAML_constraint_str
+
+for dir in "$MAIN_DIR"/*; do
+
+    if [ -d "$dir" ]; then
+        echo "Processing directory: $dir"
+
+        # Start a subshell
+        (
+            cd "$dir" || exit 1
+            if [ -f "codeml.ctl" ]; then
+                codeml codeml.ctl > codeml.log 2>&1
+            else
+                echo "Warning: codeml.ctl not found in $dir"
+            fi
+        )
+        # back to $MAIN_DIR
+    fi
+done
+
+```
+
