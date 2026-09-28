@@ -24,8 +24,7 @@ ctl_template = """
      treefile = {tree}
       outfile = {out}
 noisy = 0              * How much rubbish on the screen
-verbose = 1              * More or less detailed report
-getSE = 1                * Get standard error 
+verbose = 1              * More or less detailed report 
 
 seqtype = 1              * Data type
 ndata = 1           * Number of data sets or loci
