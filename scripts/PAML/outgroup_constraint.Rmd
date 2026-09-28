@@ -1,0 +1,131 @@
+---
+title: "outgroup_constraint.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to create a constraint tree to run iqtree on. This will ensure that the outgroups always sit outside of the ingroup. 
+
+
+
+```{python, eval=FALSE}
+
+import glob
+import os
+import re
+
+PHY_DIR = "/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Psittaciformes/neo_genes/PAML_constraint_str"
+CONSTRAINT_OUT_DIR = "/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Psittaciformes/neo_genes/PAML_constraint_str"
+IQTREE_CMDS_FILE = "/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Psittaciformes/neo_genes/PAML_constraint_str/run_iqtree_constrained.sh"
+IQTREE_BINARY = "iqtree2"
+
+# Outgroup topology: (OUTGROUP_ROOT, (OUTGROUP_MID, (OUTGROUP_INNER, (ingroup...))));
+OUTGROUP_ROOT = "Str_cam"
+OUTGROUP_MID = "Ans_ans"
+OUTGROUP_INNER = "Fal_per"
+
+os.makedirs(CONSTRAINT_OUT_DIR, exist_ok=True)
+
+
+def read_phylip_taxa(phy_path):
+    """Read taxon names from a relaxed or strict PHYLIP alignment file."""
+    taxa = []
+    with open(phy_path) as f:
+        first_line = f.readline().strip()
+        m = re.match(r"^\s*(\d+)\s+(\d+)\s*$", first_line)
+        if not m:
+            raise ValueError(f"Unexpected PHYLIP header in {phy_path}: {first_line!r}")
+        n_taxa = int(m.group(1))
+
+        for _ in range(n_taxa):
+            line = f.readline()
+            if not line:
+                break
+            name = line.split()[0].strip()
+            taxa.append(name)
+
+    return taxa
+
+
+def build_constraint_newick(taxa, root_og, mid_og, inner_og):
+    """
+    Constructs the Newick string: (root_og, (mid_og, (inner_og, (ingroup_taxa))));
+    """
+    # Check for presence of required outgroups
+    missing_ogs = [og for og in (root_og, mid_og, inner_og) if og not in taxa]
+    if missing_ogs:
+        return None, f"Missing outgroup(s) {missing_ogs} in this gene's alignment -- skipping."
+
+    # Ingroup consists of all taxa except the specified outgroups
+    ingroup = [t for t in taxa if t not in (root_og, mid_og, inner_og)]
+
+    if len(ingroup) < 2:
+        return None, f"Fewer than 2 ingroup taxa present -- constraint not meaningful."
+
+    ingroup_str = ", ".join(ingroup)
+    newick = f"({root_og}, ({mid_og}, ({inner_og}, ({ingroup_str}))));"
+    return newick, "OK"
+
+
+def main():
+    phy_files = sorted(glob.glob(os.path.join(PHY_DIR, "*", "*.phy")))
+    if not phy_files:
+        print(f">>> No .phy files found under {PHY_DIR}/*/*.phy")
+        print(f">>> Expected structure: {PHY_DIR}/<gene>/<gene>.phy")
+        return
+
+    iqtree_cmds = []
+    skipped = []
+
+    for phy_path in phy_files:
+        gene = os.path.splitext(os.path.basename(phy_path))[0]
+        taxa = read_phylip_taxa(phy_path)
+
+        newick, msg = build_constraint_newick(taxa, OUTGROUP_ROOT, OUTGROUP_MID, OUTGROUP_INNER)
+        if newick is None:
+            skipped.append({"gene": gene, "reason": msg})
+            continue
+
+        gene_out_dir = os.path.join(CONSTRAINT_OUT_DIR, gene)
+        os.makedirs(gene_out_dir, exist_ok=True)
+
+        constraint_path = os.path.join(gene_out_dir, f"{gene}_constraint.treefile")
+        with open(constraint_path, "w") as f:
+            f.write(newick + "\n")
+
+        pre_path = os.path.join(gene_out_dir, f"{gene}_constrained")
+
+        # IQ-TREE option -o specifies outgroup order/members
+        cmd = (
+            f"{IQTREE_BINARY} -s {phy_path} -g {constraint_path} "
+            f"-o {OUTGROUP_ROOT},{OUTGROUP_MID},{OUTGROUP_INNER} -m MFP -pre {pre_path} -redo"
+        )
+        iqtree_cmds.append(cmd)
+
+    with open(IQTREE_CMDS_FILE, "w") as f:
+        f.write("#!/bin/bash\nset -e\n\n")
+        for cmd in iqtree_cmds:
+            f.write(cmd + "\n")
+
+    print(f">>> Generated {len(iqtree_cmds)} constraint files under {CONSTRAINT_OUT_DIR}/<gene>/")
+    print(f">>> Wrote {len(iqtree_cmds)} iqtree commands to {IQTREE_CMDS_FILE}")
+    if skipped:
+        print(f"\n>>> Skipped {len(skipped)} genes:")
+        for s in skipped:
+            print(f"    {s['gene']}: {s['reason']}")
+    print(f"\n>>> Run all of them with: bash {IQTREE_CMDS_FILE}")
+
+
+if __name__ == "__main__":
+    main()
+
+
+```
+
