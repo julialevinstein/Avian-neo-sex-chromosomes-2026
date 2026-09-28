@@ -1,0 +1,587 @@
+---
+title: "GC_content"
+author: "Julia Levinstein"
+date: "2026-08-31"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to calculate GC content along neo-Z chromosomes. My hypothesis is that Sylvioidea is udergoing GC biased gene conversion and therefore should have higher GC content. To test that I will calculate GC along neo-z and ancestral Z
+
+## First I need to isolate the region neo region of the Z from the whole Z scaffold, either through Exonerate (only captures exons) or RagTag (more accurate because maps to everything). I tried both approaches and didnt show much difference so I will just use the Exonerate coordnates.
+
+# 1. Data processing
+
+```{bash, eval=FALSE}
+
+#get the neo Z chromosome coordinates
+
+for DIR in */; do
+SPECIES=$(basename "$DIR")
+GFF_FILE="${SPECIES}/${SPECIES}_Z_cds_mappings.gff"
+
+if [ -f "$GFF_FILE" ]; then
+echo "Processing ${SPECIES}..."
+
+# 1. Extract Target Scaffold ID (from the first Target: line)
+SCAFFOLD=$(grep -m 1 "Target:" "$GFF_FILE" | awk '{print $2}')
+
+# 2. Extract Min (Start) and Max (End) coordinates
+START=$(grep "Target range:" "$GFF_FILE" | grep -oE '[0-9]+' | sort -n | head -n 1)
+END=$(grep "Target range:" "$GFF_FILE" | grep -oE '[0-9]+' | sort -n | tail -n 1)
+
+# 3. Save formatted string to file inside the species folder
+echo "${SCAFFOLD}:${START}-${END}" > "${SPECIES}/${SPECIES}_neoZ_coordinates.txt"
+else
+  echo "Skipping ${SPECIES}: GFF file not found."
+fi
+done
+
+
+
+#now cut my Z chromosome fasta on these coordinates to isolate only neo-Z fasta
+conda activate /dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/conda_envs/bio_env
+
+for DIR in */; do
+SPECIES=$(basename "$DIR")
+FASTA="${SPECIES}/${SPECIES}_chrZ.fasta"
+COORD_FILE="${SPECIES}/${SPECIES}_neoZ_coordinates.txt"
+
+if [ -f "$FASTA" ] && [ -f "$COORD_FILE" ]; then
+echo "Extracting region for ${SPECIES}..."
+
+
+```
+
+# 2. Data analysis
+
+## 2.1. Plotting Z chromosome GC content
+
+### Meliphagidae
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+# Load data
+df_mel <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Meliphagidae/Myz_car_wholeZ_noN_GC_sliding_window.tsv", header=TRUE)
+
+# Define your Neo-Z region boundaries (in Base Pairs)
+neoZ_start <- 80398821
+neoZ_end   <- 117761136
+
+# Categorize windows based on their midpoint coordinate
+df_mel <- df_mel %>%
+  mutate(region_type = case_when(
+    midpoint_bp >= neoZ_start & midpoint_bp <= neoZ_end ~ "Neo-Z",
+    TRUE ~ "Ancestral Z"
+  ))
+ggplot(df_mel, aes(x = midpoint_bp / 1e6, y = gc_percent)) +
+  geom_line(aes(color = region_type, group = 1), size = 0.8) +
+  scale_color_manual(values = c("Ancestral Z" = "darkblue", "Neo-Z" = "firebrick")) +
+  labs(x = "Position on Chromosome Z (Mb)", 
+       y = "GC Content (%)", 
+       title = "GC Content Along Chromosome Z",
+       color = "Region") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+### Sylviida
+
+```{r}
+
+df_syl <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Sylviida/Acr_pal_wholeZ_noN_GC_sliding_window.tsv", header=TRUE)
+
+# Define your Neo-Z region boundaries (in Base Pairs)
+neoZ_start <- 80875137
+neoZ_end   <- 90429833
+
+# Categorize windows based on their midpoint coordinate
+df_syl <- df_syl %>%
+  mutate(region_type = case_when(
+    midpoint_bp >= neoZ_start & midpoint_bp <= neoZ_end ~ "Neo-Z",
+    TRUE ~ "Ancestral Z"
+  ))
+ggplot(df_syl, aes(x = midpoint_bp / 1e6, y = gc_percent)) +
+  geom_line(aes(color = region_type, group = 1), size = 0.8) +
+  scale_color_manual(values = c("Ancestral Z" = "darkblue", "Neo-Z" = "firebrick")) +
+  labs(x = "Position on Chromosome Z (Mb)", 
+       y = "GC Content (%)", 
+       title = "GC Content Along Chromosome Z",
+       color = "Region") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+```
+
+### Columbiformes
+
+```{r}
+df_col <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Columbiformes/Cal_nic_wholeZ_noN_GC_sliding_window.tsv", header=TRUE)
+# Define your Neo-Z region boundaries (in Base Pairs)
+neoZ_start <- 85565105
+neoZ_end   <- 109972330
+# Categorize windows based on their midpoint coordinate
+df_col <- df_col %>%
+  mutate(region_type = case_when(
+    midpoint_bp >= neoZ_start & midpoint_bp <= neoZ_end ~ "Neo-Z",
+    TRUE ~ "Ancestral Z"
+  ))
+ggplot(df_col, aes(x = midpoint_bp / 1e6, y = gc_percent)) +
+  geom_line(aes(color = region_type, group = 1), size = 0.8) +
+  scale_color_manual(values = c("Ancestral Z" = "darkblue", "Neo-Z" = "firebrick")) +
+  labs(x = "Position on Chromosome Z (Mb)", 
+       y = "GC Content (%)", 
+       title = "GC Content Along Chromosome Z",
+       color = "Region") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+```
+
+### Psittaciformes
+
+```{r}
+df_psi <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Psittaciformes/Mel_und_wholeZ_noN_GC_sliding_window.tsv", header=TRUE)
+# Define your Neo-Z region boundaries (in Base Pairs)
+neoZ_start <-81211880 
+neoZ_end   <- 104030019
+# Categorize windows based on their midpoint coordinate
+df_psi <- df_psi %>%
+  mutate(region_type = case_when(
+    midpoint_bp >= neoZ_start & midpoint_bp <= neoZ_end ~ "Neo-Z",
+    TRUE ~ "Ancestral Z"
+  ))
+ggplot(df_psi, aes(x = midpoint_bp / 1e6, y = gc_percent)) +
+  geom_line(aes(color = region_type, group = 1), size = 0.8) +
+  scale_color_manual(values = c("Ancestral Z" = "darkblue", "Neo-Z" = "firebrick")) +
+  labs(x = "Position on Chromosome Z (Mb)", 
+       y = "GC Content (%)", 
+       title = "GC Content Along Chromosome Z",
+       color = "Region") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+
+```
+
+### Ibis
+
+```{r}
+df_ibi <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Threskiornithidae/Nip_nip_wholeZ_noN_GC_sliding_window.tsv", header=TRUE)
+# Define your Neo-Z region boundaries (in Base Pairs)
+neoZ_start <-85540067
+neoZ_end   <- 91779573
+# Categorize windows based on their midpoint coordinate
+df_ibi <- df_ibi %>%
+  mutate(region_type = case_when(
+    midpoint_bp >= neoZ_start & midpoint_bp <= neoZ_end ~ "Neo-Z",
+    TRUE ~ "Ancestral Z"
+  ))
+ggplot(df_ibi, aes(x = midpoint_bp / 1e6, y = gc_percent)) +
+  geom_line(aes(color = region_type, group = 1), size = 0.8) +
+  scale_color_manual(values = c("Ancestral Z" = "darkblue", "Neo-Z" = "firebrick")) +
+  labs(x = "Position on Chromosome Z (Mb)", 
+       y = "GC Content (%)", 
+       title = "GC Content Along Chromosome Z",
+       color = "Region") +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+```
+
+## Neo-z 2 species comparison
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggpubr) 
+
+# 1. Filter each species dataset for 'Neo-Z' and tag the species name
+neoz_syl <- df_syl %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Acr_pal")
+
+neoz_mel <- df_mel %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Myz_car")
+
+neoz_col <- df_col %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Cal_nic")
+
+neoz_psi <- df_psi %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Mel_und")
+
+neoz_ibi <- df_ibi %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Nip_nip")
+
+# 2. Combine into one dataset
+neoz_combined <- bind_rows(neoz_syl, neoz_mel)
+neoz_combined <- bind_rows(neoz_syl, neoz_col)
+
+
+
+#get non-overlapping regions
+neoz_clean <- neoz_combined %>%
+  filter(window_start %% 50000 == 0)
+
+
+
+# 3. Run the Wilcoxon Rank Sum Test in the console
+wilcox_res <- wilcox.test(gc_percent ~ species, data = neoz_clean)
+print(wilcox_res)
+
+# 4. Plot Violin + Boxplot with automatic p-value annotation
+ggplot(neoz_clean, aes(x = species, y = gc_percent, fill = species)) +
+  # Violin plot showing distribution shape
+  geom_violin(alpha = 0.4, color = NA) +
+  # Overlaid boxplot showing median and quartiles
+  geom_boxplot(width = 0.2, color = "black", outlier.shape = NA, alpha = 0.8) +
+  # Color palette
+  scale_fill_manual(values = c("Acr_pal" = "#4575b4", "Cal_nic" = "#74add1")) +
+  # Statistical test annotation directly on the plot
+  stat_compare_means(
+    method = "wilcox.test",
+    label = "p.format",
+    label.x = 1.5,
+    size = 4.5
+  ) +
+  labs(
+    title = "Comparison of Neo-Z GC Content",
+    x = "Species",
+    y = "GC Content (%)"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+  )
+```
+
+## Ancestral-Z 2 species comparison
+
+```{r}
+  
+library(dplyr)
+library(ggplot2)
+library(ggpubr) 
+
+# 1. Filter each species dataset for 'Neo-Z' and tag the species name
+ancZ_syl <- df_syl %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Acr_pal")
+
+ancZ_mel <- df_mel %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Myz_car")
+
+ancZ_col <- df_col %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Cal_nic")
+
+ancZ_psi <- df_psi %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Mel_und")
+
+ancZ_ibi <- df_ibi %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Nip_nip")
+
+# 2. Combine into one dataset
+ancZ_combined <- bind_rows(ancZ_syl, ancZ_mel)
+ancZ_combined <- bind_rows(ancZ_syl, ancZ_col)
+
+ancZ_clean <- ancZ_combined %>%
+  filter(window_start %% 50000 == 0)
+
+# 3. Run the Wilcoxon Rank Sum Test in the console
+wilcox_res <- wilcox.test(gc_percent ~ species, data = ancZ_clean)
+print(wilcox_res)
+
+# 4. Plot Violin + Boxplot with automatic p-value annotation
+ggplot(ancZ_clean, aes(x = species, y = gc_percent, fill = species)) +
+  # Violin plot showing distribution shape
+  geom_violin(alpha = 0.4, color = NA) +
+  # Overlaid boxplot showing median and quartiles
+  geom_boxplot(width = 0.2, color = "black", outlier.shape = NA, alpha = 0.8) +
+  # Color palette
+  scale_fill_manual(values = c("Acr_pal" = "#FFDB58", "Cal_nic" = "#FFD700")) +
+  # Statistical test annotation directly on the plot
+  stat_compare_means(
+    method = "wilcox.test",
+    label = "p.format",
+    label.x = 1.5,
+    size = 4.5
+  ) +
+  labs(
+    title = "Comparison of Ancestral Z GC Content",
+    x = "Species",
+    y = "GC Content (%)"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+  )
+
+```
+
+## 2.2.plotting all the species together 
+
+### neo Z
+
+```{r}
+
+ #1. Filter each species dataset for 'Neo-Z' and tag the species name
+neoz_syl <- df_syl %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Acr_pal")
+
+neoz_mel <- df_mel %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Myz_car")
+
+neoz_col <- df_col %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Cal_nic")
+
+neoz_psi <- df_psi %>%
+  filter(region_type == "Neo-Z") %>%
+  mutate(species = "Mel_und")
+
+
+neoz_combined <- bind_rows(neoz_syl, neoz_mel, neoz_psi)
+
+
+
+#get non-overlapping regions
+neoz_clean <- neoz_combined %>%
+  filter(window_start %% 50000 == 0)
+
+
+# 4. Plot Violin + Boxplot with automatic p-value annotation
+p <- ggplot(neoz_clean, aes(x = species, y = gc_percent, fill = species)) +
+  # Violin plot showing distribution shape
+  geom_violin(alpha = 0.4, color = NA) +
+  # Overlaid boxplot showing median and quartiles
+  geom_boxplot(width = 0.2, color = "black", outlier.shape = NA, alpha = 0.8) +
+  # Color palette
+  scale_fill_manual(values = c("Acr_pal" = "#4575b4", "Cal_nic" = "#74add1", "Myz_car"= "#74add3", "Mel_und" ="#4575b3", "Nip_nip" ="#4565be")) +
+  labs(
+    title = "Comparison of Neo-Z GC Content",
+    x = "Species",
+    y = "GC Content (%)"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+  )
+
+plot(p)
+
+ggsave("C:/Users/Julia/Downloads/neo_Z_GC.png", plot = p, dpi = 300)
+
+```
+
+### ancestral Z
+
+```{r}
+# 1. Filter each species dataset for 'Neo-Z' and tag the species name
+ancZ_syl <- df_syl %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Acr_pal")
+
+
+ancZ_mel <- df_mel %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Myz_car")
+
+ancZ_col <- df_col %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Cal_nic")
+
+ancZ_psi <- df_psi %>%
+  filter(region_type == "Ancestral Z") %>%
+  mutate(species = "Mel_und")
+
+ancZ_combined <- bind_rows(ancZ_syl, ancZ_mel, ancZ_psi)
+
+ancZ_clean <- ancZ_combined %>%
+  filter(window_start %% 50000 == 0)
+
+p2 <- ggplot(ancZ_clean, aes(x = species, y = gc_percent, fill = species)) +
+  # Violin plot showing distribution shape
+  geom_violin(alpha = 0.4, color = NA) +
+  # Overlaid boxplot showing median and quartiles
+  geom_boxplot(width = 0.2, color = "black", outlier.shape = NA, alpha = 0.8) +
+  # Color palette
+  scale_fill_manual(values = c("Acr_pal" = "#FFDB58", "Cal_nic" = "#FFD700", "Myz_car" ="#FFD770", "Mel_und" ="#FFDB60")) +
+  labs(
+    title = "Comparison of Ancestral Z GC Content",
+    x = "Species",
+    y = "GC Content (%)"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+  )
+
+plot(p2)
+
+```
+
+### plot neoZ and ancestral Z comparison side to side
+
+```{r}
+library(patchwork)
+
+combined <- p + p2
+
+combined
+
+plot(combined)
+
+ggsave(
+  "C:/Users/Julia/Downloads/GC_content_combined.png",
+  plot = combined,
+  width = 12,
+  height = 6,
+  units = "in",
+  dpi = 300
+)
+```
+
+### making it a single figure
+
+```{r}
+# Add region labels
+neoz_plot <- neoz_clean %>%
+  mutate(region = "Neo-Z")
+
+ancZ_plot <- ancZ_clean %>%
+  mutate(region = "Ancestral Z")
+
+# Combine
+gc_combined <- bind_rows(neoz_plot, ancZ_plot)
+
+
+p_combined <- ggplot(
+  gc_combined,
+  aes(x = species, y = gc_percent, fill = region)
+) +
+  geom_violin(
+    position = position_dodge(width = 0.8),
+    alpha = 0.4,
+    color = NA
+  ) +
+  geom_boxplot(
+    position = position_dodge(width = 0.8),
+    width = 0.2,
+    color = "black",
+    outlier.shape = NA,
+    alpha = 0.8
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Neo-Z" = "#4575b4",
+      "Ancestral Z" = "#FFDB58"
+    )
+  ) +
+  labs(
+    title = "GC Content of Neo-Z and Ancestral Z Regions",
+    x = "Species",
+    y = "GC Content (%)",
+    fill = "Region"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 11),
+    legend.text = element_text(size = 10)
+  )
+
+print(p_combined)
+
+
+ggsave(
+  "C:/Users/Julia/Downloads/GC_content_NeoZ_vs_AncestralZ.png",
+  plot = p_combined,
+  width = 10,
+  height = 6,
+  units = "in",
+  dpi = 300
+)
+
+```
+
+## 2.3. testing wether Sylviida neoZ GC content is statistically different from other species
+
+### neoZ
+
+```{r}
+pairwise.wilcox.test(
+  x = neoz_clean$gc_percent, 
+  g = neoz_clean$species, 
+  p.adjust.method = "BH"
+)
+
+
+#now i need to account for the fact the my N (the number of sliding windowns) is very large 
+library(dplyr)
+library(rstatix)
+
+# Calculate pairwise effect sizes for all combinations
+neoz_clean %>%
+  rstatix::wilcox_effsize(gc_percent ~ species)
+```
+
+
+### whole genomes comparisons
+
+```{r}
+whole_syl <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Sylviida/Acr_pal_whole_genome_noN_GC_sliding_window.tsv", header=TRUE)
+
+whole_syl_clean <- whole_syl %>%
+  filter(window_start %% 50000 == 0)
+
+mean(whole_syl_clean$gc_percent)
+
+
+
+whole_mel <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Meliphagidae/Myz_car_whole_genome_noN_GC_sliding_window.tsv", header=TRUE)
+whole_mel_clean <- whole_mel %>%
+  filter(window_start %% 50000 == 0)
+
+mean(whole_mel_clean$gc_percent)
+
+whole_psi <- read.table("C:/Users/Julia/Desktop/IRT3/GC_content/Psittaciformes/Mel_und_whole_genome_noN_GC_sliding_window.tsv", header=TRUE)
+
+whole_psi_clean <- whole_psi %>%
+  filter(window_start %% 50000 == 0)
+
+mean(whole_psi_clean$gc_percent)
+
+```
