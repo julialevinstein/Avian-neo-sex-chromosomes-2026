@@ -1,0 +1,661 @@
+---
+title: "tree_visualization_clootl"
+author: "Julia Levinstein"
+date: "2026-07-13"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+    
+---
+
+# Script to vizualise/plot the phylogenetic trees created with clootl
+## configuration
+```{r}
+library(clootl)
+library(ape)
+library(phytools)
+
+#2025 database 
+taxonomy25 <- clootl_data$taxonomies$year2025
+```
+
+
+## 1. Parrots
+```{r}
+#1. Parrots
+
+
+outgroup_species <- "Falco peregrinus" 
+
+parrot_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$ORDER == "Psittaciformes") | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+parrot_tree_out <- extractTree(
+  species = parrot_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+
+
+#to highlight a few specific species
+species_to_keep <- c("Myiopsitta monachus", "Agapornis roseicollis", "Agapornis fischeri") # 
+
+# Create a reference data frame of species and look up their FAMILY
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", parrot_tree_out$tip.label))
+tip_df$FAMILY <- taxonomy25$FAMILY[match(tip_df$SCI_NAME, taxonomy25$SCI_NAME)]
+tip_df$FAMILY[tip_df$SCI_NAME == outgroup_species] <- "Falconidae"
+
+# Create a custom grouping column: Use the species name if it's in your list, 
+# otherwise default to the Family name (which now applies to the outgroup too)
+tip_df$PLOT_LABEL <- ifelse(
+  tip_df$SCI_NAME %in% species_to_keep, 
+  tip_df$SCI_NAME, 
+  tip_df$FAMILY
+)
+
+#identify tips to KEEP and DROP based on your custom PLOT_LABEL
+all_tips <- parrot_tree_out$tip.label
+kept_tips <- parrot_tree_out$tip.label[!duplicated(tip_df$PLOT_LABEL)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+parrot_tree_collapsed <- drop.tip(parrot_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to your custom labels
+final_labels <- tip_df$PLOT_LABEL[match(gsub("_", " ", parrot_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+parrot_tree_collapsed$tip.label <- final_labels
+
+#plot tree
+plot(parrot_tree_collapsed, cex = 0.8, no.margin = TRUE)
+```
+
+## 2. Threskiornithidae
+```{r}
+#tree with genera
+
+outgroup_species <- "Gorsachius goisagi" 
+
+thre_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY == "Threskiornithidae (Ibises and Spoonbills)") | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+thre_tree_out <- extractTree(
+  species = thre_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+#create a reference data frame of species and their corresponding GENUS
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", thre_tree_out$tip.label))
+
+#extract the genus (the first word of the scientific name)
+tip_df$GENUS <- sapply(strsplit(tip_df$SCI_NAME, " "), `[`, 1)
+
+#ensure the outgroup keeps its unique full name 
+tip_df$GENUS[tip_df$SCI_NAME == outgroup_species] <- "family Ardeidae"
+
+#identify which tips to KEEP (only the first species representing each genus)
+#identify which tips to DROP (all duplicate species within the same genus)
+all_tips <- thre_tree_out$tip.label
+kept_tips <- thre_tree_out$tip.label[!duplicated(tip_df$GENUS)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+thre_tree_collapsed <- drop.tip(thre_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Genus names
+final_genera <- tip_df$GENUS[match(gsub("_", " ", thre_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+thre_tree_collapsed$tip.label <- final_genera
+
+#plot tree
+
+plot(thre_tree_collapsed, cex = 1.5, no.margin = TRUE)
+
+
+#tree with the families within pelecaniformes
+
+pelecaniformes_families <- c(
+  "Threskiornithidae (Ibises and Spoonbills)",
+  "Ardeidae (Herons, Egrets, and Bitterns)",
+  "Scopidae (Hamerkop)",
+  "Balaenicipitidae (Shoebill)",
+  "Pelecanidae (Pelicans)"
+)
+
+pelecaniformes_species <- taxonomy25$SCI_NAME[taxonomy25$FAMILY %in% pelecaniformes_families]
+
+outgroup_species <- "Sula sula" 
+pelecaniformes_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY %in% pelecaniformes_families) | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+# 2. Extract the full species-level tree
+pelecaniformes_tree_out <- extractTree(
+  species = pelecaniformes_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+pelecaniformes_tree_out <- root(pelecaniformes_tree_out, outgroup = outgroup_species, resolve.root = TRUE)
+
+
+#create a reference data frame of species and their corresponding family
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", pelecaniformes_tree_out$tip.label))
+tip_df$FAMILY <- taxonomy25$FAMILY[match(tip_df$SCI_NAME, taxonomy25$SCI_NAME)]
+# Ensure the outgroup keeps its unique name
+tip_df$FAMILY[tip_df$SCI_NAME == outgroup_species] <- "Suliformes"
+
+#identify which tips to KEEP (only the first species representing each family)
+kept_tips_df <- tip_df[!duplicated(tip_df$FAMILY), ]
+
+#identify which tips to DROP (all the duplicate species in those families)
+all_tips <- pelecaniformes_tree_out$tip.label
+kept_tips <- pelecaniformes_tree_out$tip.label[!duplicated(tip_df$FAMILY)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+pelecaniformes_tree_collapsed <- drop.tip(pelecaniformes_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Family names
+final_families <- tip_df$FAMILY[match(gsub("_", " ", pelecaniformes_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+pelecaniformes_tree_collapsed$tip.label <- final_families
+
+#plot tree
+plot(pelecaniformes_tree_collapsed, cex = 1.3, no.margin = TRUE)
+```
+
+## 3. Sylviida
+```{r}
+sylviida_families <- c(
+  "Alaudidae (Larks)",       
+  "Hirundinidae (Swallows)",    
+  "Cettiidae (Bush Warblers and Allies)",       
+  "Phylloscopidae (Leaf Warblers)",  
+  "Acrocephalidae (Reed Warblers and Allies)",   
+  "Locustellidae (Grassbirds and Allies)",   
+  "Cisticolidae (Cisticolas and Allies)",    
+  "Macrosphenidae (African Warblers)",  
+  "Pycnonotidae (Bulbuls)",    
+  "Sylviidae (Sylviid Warblers and Allies)",      
+  "Paradoxornithidae (Parrotbills)",
+  "Zosteropidae (White-eyes, Yuhinas, and Allies)",    
+  "Timaliidae (Tree-Babblers, Scimitar-Babblers, and Allies)",       
+  "Pellorneidae (Ground Babblers and Allies)",    
+  "Leiothrichidae (Laughingthrushes and Allies)" ,
+  "Panuridae (Bearded Reedling)",
+  "Timaliidae (Tree-Babblers, Scimitar-Babblers, and Allies)",
+  "Nicatoridae (Nicators)"
+)
+
+sylviida_species <- taxonomy25$SCI_NAME[taxonomy25$FAMILY %in% sylviida_families]
+
+outgroup_species <- "Taeniopygia guttata" 
+sylviida_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY %in% sylviida_families) | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+# 2. Extract the full species-level tree
+sylviida_tree_out <- extractTree(
+  species = sylviida_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+
+#create a reference data frame of species and their corresponding family
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", sylviida_tree_out$tip.label))
+tip_df$FAMILY <- taxonomy25$FAMILY[match(tip_df$SCI_NAME, taxonomy25$SCI_NAME)]
+# Ensure the outgroup keeps its unique name
+tip_df$FAMILY[tip_df$SCI_NAME == outgroup_species] <- "Taeniopygia guttata (non-Sylvioidea passerine)"
+
+#identify which tips to KEEP (only the first species representing each family)
+kept_tips_df <- tip_df[!duplicated(tip_df$FAMILY), ]
+
+#identify which tips to DROP (all the duplicate species in those families)
+all_tips <- sylviida_tree_out$tip.label
+kept_tips <- sylviida_tree_out$tip.label[!duplicated(tip_df$FAMILY)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+sylviida_tree_collapsed <- drop.tip(sylviida_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Family names
+final_families <- tip_df$FAMILY[match(gsub("_", " ", sylviida_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+sylviida_tree_collapsed$tip.label <- final_families
+
+#plot tree
+plot(sylviida_tree_collapsed, cex = 1, no.margin = TRUE)
+
+#only the species with additional neo-sex fusion
+
+sylviida_families_reduced <- c(
+  "Alaudidae (Larks)",
+  "Panuridae (Bearded Reedling)",
+  "Nicatoridae (Nicators)",
+  "Macrosphenidae (African Warblers)",
+  "Cisticolidae (Cisticolas and Allies)",
+  "Locustellidae (Grassbirds and Allies)"
+  
+)
+
+sylviida_species_reduced <- taxonomy25$SCI_NAME[taxonomy25$FAMILY %in% sylviida_families_reduced]
+
+outgroup_species <- "Taeniopygia guttata" 
+sylviida_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY %in% sylviida_families_reduced) | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+# 2. Extract the full species-level tree
+sylviida_tree_out <- extractTree(
+  species = sylviida_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+# Root the tree
+sylviida_tree_out <- root(sylviida_tree_out, outgroup = outgroup_species, resolve.root = TRUE)
+
+#create a reference data frame of species and their corresponding family
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", sylviida_tree_out$tip.label))
+tip_df$FAMILY <- taxonomy25$FAMILY[match(tip_df$SCI_NAME, taxonomy25$SCI_NAME)]
+# Ensure the outgroup keeps its unique name
+tip_df$FAMILY[tip_df$SCI_NAME == outgroup_species] <- "Taeniopygia guttata (non-Sylvioidea passerine)"
+
+
+#identify which tips to KEEP (only the first species representing each family)
+kept_tips_df <- tip_df[!duplicated(tip_df$FAMILY), ]
+
+#identify which tips to DROP (all the duplicate species in those families)
+all_tips <- sylviida_tree_out$tip.label
+kept_tips <- sylviida_tree_out$tip.label[!duplicated(tip_df$FAMILY)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+sylviida_tree_collapsed <- drop.tip(sylviida_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Family names
+final_families <- tip_df$FAMILY[match(gsub("_", " ", sylviida_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+final_families[final_families == "Locustellidae (Grassbirds and Allies)"] <- "Other Sylvioidea passerines"
+sylviida_tree_collapsed$tip.label <- final_families
+
+#plot tree
+plot(sylviida_tree_collapsed, cex = 0.8, no.margin = TRUE)
+```
+
+## 4. Meliphagidae
+```{r}
+#for Meliphagiade I only want the clade in which neo-sex fusions have been identified
+
+
+outgroup_species <- "Taeniopygia guttata" 
+
+#all species for the Meliphagidae family + your outgroup
+mel_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY == "Meliphagidae (Honeyeaters)") | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+#extract the full species-level tree
+mel_tree_out <- extractTree(
+  species = mel_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+
+#create a reference data frame of species and their corresponding GENUS
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", mel_tree_out$tip.label))
+
+#extract the genus (the first word of the scientific name)
+tip_df$GENUS <- sapply(strsplit(tip_df$SCI_NAME, " "), `[`, 1)
+
+#ensure the outgroup keeps its unique full name so it doesn't just display "Taeniopygia"
+tip_df$GENUS[tip_df$SCI_NAME == outgroup_species] <- "Taeniopygia guttata (outgroup)"
+
+#identify which tips to KEEP (only the first species representing each genus)
+#identify which tips to DROP (all duplicate species within the same genus)
+all_tips <- mel_tree_out$tip.label
+kept_tips <- mel_tree_out$tip.label[!duplicated(tip_df$GENUS)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+mel_tree_collapsed <- drop.tip(mel_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Genus names
+final_genera <- tip_df$GENUS[match(gsub("_", " ", mel_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+mel_tree_collapsed$tip.label <- final_genera
+
+#plot complete tree
+
+plot(mel_tree_collapsed, cex = 0.6, no.margin = TRUE)
+
+
+
+# --- reduced tree ---
+
+#genera I want to keep 
+genera_to_keep <- c("Ptiloprora", "Melipotes", "Conopophila", "Melilestes", "Phylidonyris", "Entomyzon", "Nesoptilotis", "Manorina", "Lichenostomus","Philemon", "Myzomela", "Acanthiza", "Pardalotus") 
+
+genera_to_keep <- c("Ptiloprora", "Melipotes", "Conopophila",  "Entomyzon", "Manorina", "Lichenostomus","Philemon", "Myzomela", "Acanthiza", "Pardalotu","Phylidonyris")
+
+#include the outgroup label in your allowed list so it doesn't get dropped
+allowed_labels <- c(genera_to_keep, "Taeniopygia guttata (outgroup)")
+# --------------------------------------------
+
+#identify tips to KEEP (Only the first representative of our CHOSEN genera)
+kept_tips <- mel_tree_out$tip.label[
+  !duplicated(tip_df$GENUS) & (tip_df$GENUS %in% allowed_labels)
+]
+
+#indentify ALL tips to DROP (Everything else in the tree)
+all_tips <- mel_tree_out$tip.label
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#dop the unwanted tips
+mel_tree_collapsed <- drop.tip(mel_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Genus names
+final_genera <- tip_df$GENUS[match(gsub("_", " ", mel_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+mel_tree_collapsed$tip.label <- final_genera
+
+#plot subset tree
+plot(mel_tree_collapsed, cex = 1.5, no.margin = TRUE)
+```
+
+## 5. Columbiformes
+```{r}
+outgroup_species <- "Mesitornis unicolor" 
+
+col_species_out <- taxonomy25$SCI_NAME[
+  (taxonomy25$FAMILY == "Columbidae (Pigeons and Doves)") | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+#extract the full species-level tree
+col_tree_out <- extractTree(
+  species = col_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+#create a reference data frame of species and their corresponding GENUS
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", col_tree_out$tip.label))
+
+#extract the genus (the first word of the scientific name)
+tip_df$GENUS <- sapply(strsplit(tip_df$SCI_NAME, " "), `[`, 1)
+
+#ensure the outgroup keeps its unique full name so it doesn't just display "Taeniopygia"
+tip_df$GENUS[tip_df$SCI_NAME == outgroup_species] <- "Mesitornis unicolor (outgroup)"
+
+#identify which tips to KEEP (only the first species representing each genus)
+#identify which tips to DROP (all duplicate species within the same genus)
+all_tips <- col_tree_out$tip.label
+kept_tips <- col_tree_out$tip.label[!duplicated(tip_df$GENUS)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop the duplicate tips from the tree structure
+col_tree_collapsed <- drop.tip(col_tree_out, tips_to_drop)
+
+#rename the remaining unique tips to their Genus names
+final_genera <- tip_df$GENUS[match(gsub("_", " ", col_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+col_tree_collapsed$tip.label <- final_genera
+
+#plot complete tree
+
+plot(col_tree_collapsed, cex = 0.6, no.margin = TRUE)
+```
+
+## 6. Leptosomiformes
+
+```{r}
+leptosomiformes_species <- c("Leptosomus discolor", "Colius striatus", "Apaloderma vittatum", "Anser anser", "Apus apus", "Columba livia", "Bucco capensis")
+
+leptosomiformes_tree <- extractTree(
+  species = leptosomiformes_species, 
+  label_type = "scientific", 
+  taxonomy_year = 2025,
+  force = TRUE
+)
+
+plot(leptosomiformes_tree, cex = 1.5, no.margin = TRUE)
+```
+
+##7. Passerines tree
+```{r}
+#Passerines tree
+outgroup_species <- "Myiopsitta monachus" 
+target_families <- c("Alaudidae (Larks)","Panuridae (Bearded Reedling)","Nicatoridae (Nicators)","Macrosphenidae (African Warblers)", "Cisticolidae (Cisticolas and Allies)",
+ "Locustellidae (Grassbirds and Allies)","Sturnidae (Starlings)", "Meliphagidae (Honeyeaters)", "Petroicidae (Australasian Robins)", "Pipridae (Manakins)" )  # Add your target family/families here
+other_species <-"Locustellidae (Grassbirds and Allies)"
+
+pas_species_out <- taxonomy25$SCI_NAME[
+  ((taxonomy25$ORDER == "Passeriformes") & (taxonomy25$FAMILY %in% target_families)) | 
+    (taxonomy25$SCI_NAME == outgroup_species)
+]
+
+pas_tree_out <- extractTree(
+  species = pas_species_out, 
+  label_type = "scientific", 
+  taxonomy_year = 2025
+)
+
+#create a reference data frame matching tree tips to their FAMILY
+tip_df <- data.frame(SCI_NAME = gsub("_", " ", pas_tree_out$tip.label))
+tip_df$FAMILY <- taxonomy25$FAMILY[match(tip_df$SCI_NAME, taxonomy25$SCI_NAME)]
+
+#ensure the outgroup keeps its label instead of displaying NA or non-passerine family
+tip_df$FAMILY[tip_df$SCI_NAME == outgroup_species] <- "Non-passerines"
+tip_df$FAMILY[tip_df$FAMILY == other_species] <- "Other Sylvioidea passerines"
+
+
+
+all_tips <- pas_tree_out$tip.label
+kept_tips <- pas_tree_out$tip.label[!duplicated(tip_df$FAMILY)]
+tips_to_drop <- setdiff(all_tips, kept_tips)
+
+#drop duplicate tips from the tree structure so only one representative per family remains
+pas_tree_collapsed <- drop.tip(pas_tree_out, tips_to_drop)
+
+#rename the remaining tips to their Family names
+final_families <- tip_df$FAMILY[match(gsub("_", " ", pas_tree_collapsed$tip.label), tip_df$SCI_NAME)]
+pas_tree_collapsed$tip.label <- final_families
+
+#plot complete tree
+
+plot(pas_tree_collapsed, cex = 1.2, no.margin = TRUE)
+```
+
+## 8. Avian neo sex fusion tree not including my new species 
+```{r}
+species_to_keep <- c( "Pluvialis apricaria", "Panurus biarmicus", "Alauda arvensis","Cisticola juncidis", "Nicator vireo", "Sylvietta brachyura", "Entomyzon cyanotis", "Myiopsitta monachus", "Melopsittacus undulatus", "Nipponia nippon", "Sula sula", "Harpia harpyja", "Crotophaga ani", "Eopsaltria australis", "Pavo cristatus", "Anser cygnoides", "Anas acuta", "Aythya fuligula", "Chlamydotis macqueenii", "Balearica regulorum", "Myzomela cardinalis", "Philemon citreogularis", "Sula granti", "Sula dactylatra", "Amazona aestiva", "Agapornis roseicollis", "Agapornis fischeri", "Guira guira", "Pygoscelis adeliae", "Gulosus aristotelis", "Calonectris diomedea", "Spheniscus humboldti", "Nyctibius grandis", "Podargus strigoides", "Calypte anna", "Archilochus colubris", "Colius striatus", "Dryobates pubescens", "Pogoniulus pusillus", "Pseudopipra pipra", "Poecile atricapillus", "Eopsaltria australis")
+
+avian_tree <- extractTree(
+  species = species_to_keep, 
+  label_type = "scientific", 
+  taxonomy_year = 2025,
+  force = TRUE
+)
+
+# 3. Plotagem da árvore
+plot(avian_tree, cex = 1.5, no.margin = TRUE)
+
+
+
+#changing the fonts
+# Set global font parameter to 3 (Italic) and family to serif
+par(font = 3, family = "sans") 
+
+# Plot your tree
+tree_plot <- plot(avian_tree, cex = 1, no.margin = TRUE)
+
+
+#coloring specific clades
+library(ggtree)
+library(dplyr)
+library(ggplot2)
+
+# 1. Build and store the complete ggtree object into a variable
+final_tree <- ggtree(avian_tree, linewidth = 0.5, color = "black") + 
+  
+  # Highlight terminal branches for target species
+  geom_tree(data = function(df) {
+    df %>% filter(isTip & label %in% c(
+      "Platalea leucorodia", "Acridotheres tristis", 
+      "Theristicus caerulescens", "Caloenas nicobarica", 
+      "Leptosomus discolor", "Pterocles gutturalis"
+    ))
+  }, aes(color = label), linewidth = 1) +
+  
+  # Format tip labels
+  geom_tiplab(aes(color = label), size = 6, fontface = "italic") +
+  
+  # Map custom colors
+  scale_color_manual(
+    values = c(
+      "Platalea leucorodia"     = "red",
+      "Theristicus caerulescens" = "red",
+      "Acridotheres tristis"     = "red",
+      "Caloenas nicobarica"     = "red",
+      "Leptosomus discolor"     = "red",
+      "Pterocles gutturalis"    = "red"
+    ),
+    na.value = "black" # Keeps non-target species black
+  ) +
+  
+  # Expand x-axis limit so long tip names don't get cut off
+  xlim(0, max(node.depth.edgelength(avian_tree)) * 1.5) +
+  
+  # Remove legend and force crisp white background
+  theme(legend.position = "none")
+
+# 2. Save using the correct plot object variable ('final_tree')
+ggsave(
+  filename = "avian_tree_large_new.png", 
+  plot = final_tree, 
+  width = 10, 
+  height = 18, 
+  units = "in", 
+  dpi = 300, 
+  bg = "white"
+)
+
+
+# 1. Open the PNG graphics device FIRST
+png("avian_tree_large_new.png", width = 10, height = 18, units = "in", res = 300)
+
+# 2. Set font parameters inside the active PNG device
+# (font = 3 is Italic, family = "sans" sets a clean sans-serif font)
+par(font = 3, family = "sans")
+
+# 3. Draw the tree directly to the PNG device
+plot(avian_tree, cex = 1, no.margin = TRUE)
+
+# 4. Save and close the file
+dev.off()
+```
+
+
+
+##9. Avian neo sex fusion tree including my new species 
+```{r}
+#including my new species
+
+species_to_keep <- c("Pluvialis apricaria", "Panurus biarmicus", "Alauda arvensis","Cisticola juncidis", "Nicator vireo", "Sylvietta brachyura", "Entomyzon cyanotis", "Myiopsitta monachus", "Melopsittacus undulatus", "Nipponia nippon", "Sula sula", "Harpia harpyja", "Crotophaga ani", "Pavo cristatus", "Anser cygnoides", "Anas acuta", "Aythya fuligula", "Chlamydotis macqueenii", "Balearica regulorum", "Myzomela cardinalis", "Philemon citreogularis", "Platalea leucorodia", "Theristicus caerulescens", "Sula granti", "Sula dactylatra", "Amazona aestiva", "Agapornis roseicollis", "Agapornis fischeri", "Acridotheres tristis", "Caloenas nicobarica", "Leptosomus discolor", "Pterocles gutturalis", "Guira guira", "Pygoscelis adeliae", "Gulosus aristotelis", "Calonectris diomedea", "Spheniscus humboldti", "Nyctibius grandis", "Podargus strigoides", "Calypte anna", "Archilochus colubris", "Colius striatus", "Dryobates pubescens", "Pogoniulus pusillus", "Pseudopipra pipra", "Poecile atricapillus", "Eopsaltria australis")
+
+
+
+avian_tree <- extractTree(
+  species = species_to_keep, 
+  label_type = "scientific", 
+  taxonomy_year = 2025,
+  force = TRUE
+)
+
+# 3. Plotagem da árvore
+plot(avian_tree, cex = 1.5, no.margin = TRUE)
+
+
+
+#changing the fonts
+# Set global font parameter to 3 (Italic) and family to serif
+par(font = 3, family = "sans") 
+
+# Plot your tree
+tree_plot <- plot(avian_tree, cex = 1, no.margin = TRUE)
+
+
+#coloring specific clades
+library(ggtree)
+library(dplyr)
+library(ggplot2)
+
+# 1. Build and store the complete ggtree object into a variable
+final_tree <- ggtree(avian_tree, linewidth = 0.5, color = "black") + 
+  
+  # Highlight terminal branches for target species
+  geom_tree(data = function(df) {
+    df %>% filter(isTip & label %in% c(
+      "Platalea leucorodia", "Acridotheres tristis", 
+      "Theristicus caerulescens", "Caloenas nicobarica", 
+      "Leptosomus discolor", "Pterocles gutturalis"
+    ))
+  }, aes(color = label), linewidth = 1) +
+  
+  # Format tip labels
+  geom_tiplab(aes(color = label), size = 6, fontface = "italic") +
+  
+  # Map custom colors
+  scale_color_manual(
+    values = c(
+      "Platalea leucorodia"     = "red",
+      "Theristicus caerulescens" = "red",
+      "Acridotheres tristis"     = "red",
+      "Caloenas nicobarica"     = "red",
+      "Leptosomus discolor"     = "red",
+      "Pterocles gutturalis"    = "red"
+    ),
+    na.value = "black" # Keeps non-target species black
+  ) +
+  
+  # Expand x-axis limit so long tip names don't get cut off
+  xlim(0, max(node.depth.edgelength(avian_tree)) * 1.5) +
+  
+  # Remove legend and force crisp white background
+  theme(legend.position = "none")
+
+# 2. Save using the correct plot object variable ('final_tree')
+ggsave(
+  filename = "avian_tree_large_new.png", 
+  plot = final_tree, 
+  width = 10, 
+  height = 18, 
+  units = "in", 
+  dpi = 300, 
+  bg = "white"
+)
+
+
+# 1. Open the PNG graphics device FIRST
+png("avian_tree_large_new.png", width = 10, height = 18, units = "in", res = 300)
+
+# 2. Set font parameters inside the active PNG device
+# (font = 3 is Italic, family = "sans" sets a clean sans-serif font)
+par(font = 3, family = "sans")
+
+# 3. Draw the tree directly to the PNG device
+plot(avian_tree, cex = 1, no.margin = TRUE)
+
+# 4. Save and close the file
+dev.off()
+
+```
+
