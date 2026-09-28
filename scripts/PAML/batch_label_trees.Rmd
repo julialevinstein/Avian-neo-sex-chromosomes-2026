@@ -1,0 +1,188 @@
+---
+title: "batch_label_trees"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to label trees for PAML model=2 (only neo_genes trees). This will allow the outgroups (which have no sex-autosome fusion) to have distinct dN/dS estimations than for the group of interest (with sex-autosome fusion). The script will add a "#" to the tree branches with a number associated with the category (outgroup or ingroup). 
+
+```{python, eval=FALSE}
+import glob
+import os
+import re
+
+import pandas as pd
+
+from newick_utils import (
+    Node,
+    parse_newick,
+    find_mrca,
+    is_descendant,
+    check_outgroup_monophyly,
+)
+
+# =============================================================================
+# 0. CONFIGURATION
+# =============================================================================
+IQTREE_OUT_DIR = "/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Psittaciformes/neo_genes/PAML_constraint_str"
+OUTPUT_TREE_DIR = IQTREE_OUT_DIR
+
+# Define all outgroup species here 
+OUTGROUPS = {"Str_cam", "Ans_ans", "Fal_per"}
+
+os.makedirs(OUTPUT_TREE_DIR, exist_ok=True)
+
+
+# =============================================================================
+# 1. SERIALIZE A LABELED TREE BACK TO PAML-STYLE NEWICK
+# =============================================================================
+def _fmt_length(length):
+    """Format a branch length in plain fixed-point notation, never
+    scientific ('1e-06' style). PAML's Newick parser likely accepts
+    scientific notation fine, but there's no reason to rely on that
+    assumption when a fixed-point format is unambiguous and trivial."""
+    if length is None:
+        return ""
+    return f"{length:.10f}"
+
+
+def serialize(node, is_root=True):
+    if node.is_leaf():
+        s = f"{node.name}: {_fmt_length(node.length)}"
+    else:
+        inner = ",".join(serialize(c, is_root=False) for c in node.children)
+        s = f"({inner})"
+        if node.length is not None:
+            s += f": {_fmt_length(node.length)}"
+    if node.label is not None:
+        s += f" #{node.label}"
+    if is_root:
+        s += ";"
+    return s
+
+
+def clean_taxon_name(raw_name):
+    """Sanitize taxon names by removing branch lengths, quotes, and punctuation."""
+    if not raw_name:
+        return ""
+    # Strip branch length colon if present
+    name = raw_name.split(":")[0]
+    # Strip quotes, semicolons, and trailing whitespaces
+    name = name.strip("';\" \t\n\r")
+    return name
+
+
+# =============================================================================
+# 2. LABEL A SINGLE TREE
+# =============================================================================
+def label_tree_for_fusion(tree, outgroup_taxa, foreground_taxa):
+    is_clean, rerooted, mrca_node, msg = check_outgroup_monophyly(
+        tree, outgroup_taxa, foreground_taxa
+    )
+    if not is_clean:
+        return False, None, msg
+
+    mrca_node.label = "1"
+
+    def label_descendants(node):
+        for child in node.children:
+            child.label = "2"
+            label_descendants(child)
+
+    label_descendants(mrca_node)
+
+    return True, rerooted, "OK"
+
+
+# =============================================================================
+# 3. BATCH RUN -- auto-discover every <gene>/<gene>_constrained.treefile
+# =============================================================================
+def main():
+    treefiles = sorted(
+        glob.glob(os.path.join(IQTREE_OUT_DIR, "*", "*_constrained.treefile"))
+    )
+    if not treefiles:
+        print(f">>> No *_constrained.treefile files found under {IQTREE_OUT_DIR}/*/")
+        return
+
+    print(f">>> Found {len(treefiles)} constrained tree files")
+
+    needs_review = []
+    labeled_ok = []
+
+    for in_path in treefiles:
+        gene = os.path.basename(os.path.dirname(in_path))
+
+        with open(in_path) as f:
+            newick_str = f.read()
+
+        try:
+            tree = parse_newick(newick_str)
+        except Exception as e:
+            needs_review.append(
+                {"Gene": gene, "Treefile": in_path, "Reason": f"parse_error: {e}"}
+            )
+            continue
+
+        # Clean all extracted leaf names explicitly
+        raw_leaves = tree.leaf_names()
+        all_leaves = {clean_taxon_name(leaf) for leaf in raw_leaves}
+
+        # Check if all required outgroups are present in the tree
+        missing_ogs = OUTGROUPS - all_leaves
+        if missing_ogs:
+            needs_review.append(
+                {"Gene": gene, "Treefile": in_path,
+                 "Reason": f"outgroup taxon/taxa '{', '.join(missing_ogs)}' not present in this tree (Found: {all_leaves})"}
+            )
+            continue
+
+        # Ingroup is all leaves minus the outgroups
+        foreground = sorted(all_leaves - OUTGROUPS)
+
+        success, labeled_tree, msg = label_tree_for_fusion(tree, OUTGROUPS, foreground)
+
+        if not success:
+            needs_review.append({"Gene": gene, "Treefile": in_path, "Reason": msg})
+            continue
+
+        gene_out_dir = os.path.join(OUTPUT_TREE_DIR, gene)
+        os.makedirs(gene_out_dir, exist_ok=True)
+        out_path = os.path.join(gene_out_dir, f"{gene}_labeled.treefile")
+        with open(out_path, "w") as f:
+            f.write(serialize(labeled_tree) + "\n")
+
+        labeled_ok.append({"Gene": gene, "Treefile": out_path, "Status": "labeled_stem_crown"})
+
+    labeled_df = pd.DataFrame(labeled_ok)
+    review_df = pd.DataFrame(needs_review)
+
+    if len(labeled_df):
+        labeled_df.to_csv(
+            os.path.join(OUTPUT_TREE_DIR, "labeling_summary.tsv"), sep="\t", index=False
+        )
+    if len(review_df):
+        review_df.to_csv(
+            os.path.join(OUTPUT_TREE_DIR, "needs_manual_review.tsv"), sep="\t", index=False
+        )
+
+    print(f"\n>>> Successfully labeled: {len(labeled_df)} / {len(treefiles)} genes")
+    print(f">>> Flagged for manual review: {len(review_df)} genes")
+    if len(review_df):
+        print("\n=== GENES NEEDING MANUAL REVIEW ===")
+        print(review_df.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+
