@@ -1,0 +1,71 @@
+---
+title: "extract_crown_dS.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to extract the crown dS values individually for each tip, instead of using an average out approach. 
+
+```{python, eval=FALSE}
+from pathlib import Path
+from ete3 import Tree
+import pandas as pd
+
+BASE_DIR = Path(".")
+NEO_GENE_FILE = "neo_genes_values_with_outgroup_branches_with_segments.tsv"  # just needs the Gene column
+ALL_OUTGROUPS = ["Fal_per", "Ans_ans", "Str_cam"]
+ROOTING_PRIORITY = ["Str_cam"]
+
+
+def reroot_tree(tree, priority_list):
+    leaf_names = set(tree.get_leaf_names())
+    for taxon in priority_list:
+        if taxon in leaf_names:
+            tree.set_outgroup(tree.search_nodes(name=taxon)[0])
+            return taxon
+    return None
+
+
+rows = []
+df_neo = pd.read_csv(NEO_GENE_FILE, sep="\t")
+
+for gene in df_neo["Gene"]:
+    tree_file = BASE_DIR / gene / f"{gene}_dS_tree.nwk"
+    if not tree_file.exists():
+        continue
+
+    tree = Tree(str(tree_file))
+    reroot_tree(tree, ROOTING_PRIORITY)
+    all_tips = tree.get_leaf_names()
+    outgroups_present = [t for t in ALL_OUTGROUPS if t in all_tips]
+    ingroup_tips = [t for t in all_tips if t not in outgroups_present]
+
+    if len(parrot_tips) < 2:
+        continue
+    crown_node = tree.get_common_ancestor(ingroup_tips)
+
+    for tip in parrot_tips:
+        rows.append({
+            "Gene": gene,
+            "Tip": tip,
+            "Crown_dS_tip": crown_node.get_distance(tip),
+        })
+
+df_out = pd.DataFrame(rows)
+df_out.to_csv("neo_genes_crown_tip_distances.tsv", sep="\t", index=False)
+
+n_tips_per_gene = df_out.groupby("Gene").size()
+print(f">>> Saved neo_genes_crown_tip_distances.tsv "
+      f"({len(df_out)} tip observations across {df_out['Gene'].nunique()} genes)")
+print(f">>> Tips per gene: min={n_tips_per_gene.min()}, "
+      f"median={n_tips_per_gene.median():.0f}, max={n_tips_per_gene.max()}")
+
+```
+
