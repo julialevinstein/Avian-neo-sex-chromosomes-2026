@@ -1,0 +1,68 @@
+---
+title: "codeml_control"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+## Scritp to create a codeml.ctl file for each gene subdirectory in a PAML directory
+
+```{python}
+import os
+import subprocess
+import sys
+main_dir = sys.argv[1]
+
+# Note the {seq}, {tree}, and {out} placeholders
+ctl_template = """
+      seqfile = {seq}
+     treefile = {tree}
+      outfile = {out}
+noisy = 0              * How much rubbish on the screen
+verbose = 1              * More or less detailed report
+getSE = 1                * Get standard error 
+
+seqtype = 1              * Data type
+ndata = 1           * Number of data sets or loci
+icode = 0              * Genetic code
+cleandata = 0              * Remove sites with ambiguity data?
+
+model = 0      * Models for ω varying across lineages (1) or a set ω (0 and 2)
+NSsites = 0         * Models for ω varying across sites
+CodonFreq = 2        * Codon frequencies
+estFreq = 0        * Use observed freqs or estimate freqs by ML
+clock = 0          * Clock model
+fix_omega = 0         * Estimate or fix omega
+omega = 0.5        * Initial or fixed omega`
+"""
+
+for root, dirs, files in os.walk(main_dir):
+    # Find folders that contain both a .phy and a .treefile
+    phy_file = next((f for f in files if f.endswith(".phy")), None)
+    tree_file = next((f for f in files if f.endswith("constrained.treefile")), None)
+
+    if phy_file and tree_file:
+        gene_name = phy_file.replace(".phy", "").replace("_NT", "")
+        out_name = f"{gene_name}_mlc"
+
+        # Fill in the template
+        current_ctl = ctl_template.format(
+            seq=phy_file,
+            tree=tree_file,
+            out=out_name
+        )
+
+        # Define path for the temporary control file
+        ctl_path = os.path.join(root, "codeml.ctl")
+
+        # Write the control file into the gene folder
+        with open(ctl_path, "w") as f:
+            f.write(current_ctl)
+
+```
+
