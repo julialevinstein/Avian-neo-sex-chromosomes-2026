@@ -1,0 +1,304 @@
+---
+title: "Z_sizes"
+author: "Julia Levinstein"
+date: "2026-09-08"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to plot the relationship between avian Z chromosome sizes and the indentification of neo-sex chromosomes
+
+## 1. read Z sizes file
+
+```{r}
+df_Z <- read.delim("C:/Users/Julia/Downloads/Z_sizes_sorted.txt")
+
+#filtering to remove duplicates from multiple assemblies
+#first, filter inversily by size
+df_Z_sorted <- df_Z[order(df_Z$Species, -df_Z$Size), ]
+#then keep only first occurrence of each species
+
+df_Z_unique <- df_Z_sorted[!duplicated(df_Z_sorted$Species), ]
+df_Z_90mb <- df_Z_unique [df_Z_unique$Size > 90000000,]
+df_Z_85mb <- df_Z_unique [df_Z_unique$Size > 85000000,]
+
+
+
+#get average size from avian Z chromosomes 
+
+mean_Z <- mean(df_Z_unique$Size)
+
+```
+
+## 2. select species with identified sex chromosome fusions
+
+```{r}
+
+#define sex_fusions vector
+sex_fusions <- c("Agapornis fischeri", "Podargus strigoides", "Poecile atricapillus", "Dryobates pubescens", "Amazona ochrocephala", "Agapornis roseicollis", "Pogoniulus pusillus", "Myzomela cardinalis", "Myzomela tristrami", "Ara ararauna", "Guaruba guarouba", "Amazona aestiva", "Myiopsitta monachus", "Psittacula echo", "Melopsittacus undulatus", "Prinia subflava", "Strigops habroptila", "Nyctibius grandis", "	
+Nipponia nippon", "Acrocephalus paludicola", "Hirundo rustica", "Nipponia nippon", "Anser cygnoides", "Ara ararauna", "	
+Dryobates pubescens", "Guaruba guarouba", "Harpia harpyja", "	
+Picus viridis", "Poecile atricapillus", "Hirundo rustica", "Anser cygnoides")
+```
+
+## 3. plot bar plot of Species X Z size
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+df_plot <- df_Z_90mb %>%
+  mutate(
+    Size_Mb = Size / 1e6,
+    Highlight = ifelse(Species %in% sex_fusions, "sex_fusions", "Other"),
+    # Reorder Species factor levels by Size for a clean sorted plot
+    Species = reorder(Species, Size_Mb)
+  )
+
+p <- ggplot(df_plot, aes(x = Size_Mb, y = Species, fill = Highlight)) +
+  geom_col(width = 0.75) +
+  scale_x_continuous(
+    breaks = seq(10, 180, by = 10),
+    limits = c(0, max(df_plot$Size_Mb) * 1.05), # Ensures all bars fit neatly
+    expand = c(0, 0)
+    )+
+  # Single scale_fill_manual call containing values, labels, and title
+  scale_fill_manual(
+  name = "",
+  breaks = c("sex_fusions"), # Keeps only 'sex_fusions' in the legend
+  values = c("sex_fusions" = "#D55E00", "Other" = "grey80"),
+  labels = c("sex_fusions" = "described neo-sex chromosomes")
+) +
+  labs(
+    x = "Z Chromosome Size (Mb)",
+    y = NULL
+    # Removed fill = NULL here so it doesn't overwrite 'name' from scale_fill_manual
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(face = "italic", size = 9),
+    axis.text.x = element_text(size = 9, color = "black"),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    legend.position = "top",
+    legend.text = element_text(size = 9),
+    panel.grid.major.x = element_line(color = "grey90", linetype = "dotted")
+  )
+
+print(p)
+
+
+ggsave("C:/Users/Julia/Downloads/Avian_Z_Sizes_complete.png", plot = p, width = 7, height = 11, dpi = 300)
+
+```
+
+## 4.remove some species to reduce graph
+
+```{r}
+#keep only bigger Z
+
+	
+df_Z_99mb <- df_Z_unique [df_Z_unique$Size > 99917674,] 
+
+df_plot_reduced <- df_Z_99mb %>%
+  mutate(
+    Size_Mb = Size / 1e6,
+    Highlight = ifelse(Species %in% sex_fusions, "sex_fusions", "Other"),
+    # Reorder Species factor levels by Size for a clean sorted plot
+    Species = reorder(Species, Size_Mb)
+  )
+
+p <- ggplot(df_plot_reduced, aes(x = Size_Mb, y = Species, fill = Highlight)) +
+  geom_col(width = 0.75) +
+  scale_x_continuous(
+    breaks = seq(10, 180, by = 10),
+    limits = c(0, max(df_plot_reduced$Size_Mb) * 1.05), # Ensures all bars fit neatly
+    expand = c(0, 0)
+    )+
+  # Single scale_fill_manual call containing values, labels, and title
+  scale_fill_manual(
+  name = "",
+  breaks = c("sex_fusions"), # Keeps only 'sex_fusions' in the legend
+  values = c("sex_fusions" = "#D55E00", "Other" = "grey80"),
+  labels = c("sex_fusions" = "described neo-sex chromosomes")
+) +
+  labs(
+    x = "Z Chromosome Size (Mb)",
+    y = NULL
+    # Removed fill = NULL here so it doesn't overwrite 'name' from scale_fill_manual
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(face = "italic", size = 9),
+    axis.text.x = element_text(size = 9, color = "black"),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    legend.position = "top",
+    legend.text = element_text(size = 9),
+    panel.grid.major.x = element_line(color = "grey90", linetype = "dotted")
+  )
+
+print(p)
+
+
+ggsave("C:/Users/Julia/Downloads/Avian_Z_Sizes_reduced.png", plot = p, dpi = 300)
+
+
+```
+
+## 5. Add to the plot avian mean Z length
+
+```{r}
+p <- ggplot(df_plot_reduced, aes(x = Size_Mb, y = Species, fill = Highlight)) +
+  geom_col(width = 0.75) +
+  
+  # --- ADDED: Vertical reference line at 87 Mb ---
+  geom_vline(xintercept = 87, linetype = "dashed", color = "black", linewidth = 0.6) +
+  
+  # Optional: Text label directly above or next to the line
+  annotate(
+    "text", 
+    x = 87, 
+    y = Inf, 
+    label = "", 
+    vjust = 0, 
+    hjust = 0.5, 
+    size = 3, 
+    fontface = "italic"
+  ) +
+  # -----------------------------------------------
+
+  scale_x_continuous(
+    breaks = seq(10, 180, by = 10),
+    limits = c(0, max(df_plot_reduced$Size_Mb) * 1.05), # Ensures all bars fit neatly
+    expand = c(0, 0)
+  ) +
+  # Single scale_fill_manual call containing values, labels, and title
+  scale_fill_manual(
+    name = "",
+    breaks = c("sex_fusions"), # Keeps only 'sex_fusions' in the legend
+    values = c("sex_fusions" = "#D55E00", "Other" = "grey80"),
+    labels = c("sex_fusions" = "described neo-sex chromosomes")
+  ) +
+  labs(
+    x = "Z Chromosome Size (Mb)",
+    y = NULL
+    # Removed fill = NULL here so it doesn't overwrite 'name' from scale_fill_manual
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(face = "italic", size = 9),
+    axis.text.x = element_text(size = 9, color = "black"),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    legend.position = c(0.8, 0.15), # <--- PLACES LEGEND INSIDE BOTTOM RIGHT
+    legend.background = element_rect(fill = "white", color = NA),
+    legend.text = element_text(size = 8),
+    panel.grid.major.x = element_line(color = "grey90", linetype = "dotted")
+  )
+print(p)
+
+
+
+#with legend
+
+library(ggplot2)
+
+p <- ggplot(df_plot_reduced, aes(x = Size_Mb, y = Species, fill = Highlight)) +
+  geom_col(width = 0.75) +
+  
+  # Vertical reference line
+  geom_vline(xintercept = 87, linetype = "dashed", color = "black", linewidth = 0.6) +
+  
+  # Text anchored to top species bar, sitting cleanly right above it
+  annotate(
+    "text", 
+    x = 87, 
+    y = "Podargus strigoides", # Anchors strictly to top species name
+    label = "Mean Avian Z (87 Mb)", 
+    vjust = -0.7,              # Pushes text right above top bar
+    hjust = 0.5, 
+    size = 3.2, 
+    fontface = "italic"
+  ) +
+
+  # Prevents top plot clipping
+  coord_cartesian(clip = "off") +
+
+  scale_x_continuous(
+    breaks = seq(10, 180, by = 10),
+    limits = c(0, max(df_plot_reduced$Size_Mb) * 1.05),
+    expand = c(0, 0)
+  ) +
+  
+  scale_fill_manual(
+    name = "",
+    breaks = c("sex_fusions"),
+    values = c("sex_fusions" = "#D55E00", "Other" = "grey80"),
+    labels = c("sex_fusions" = "described neo-sex chromosomes")
+  ) +
+  
+  labs(
+    x = "Z Chromosome Size (Mb)",
+    y = NULL
+  ) +
+  
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(face = "italic", size = 9),
+    axis.text.x = element_text(size = 9, color = "black"),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    legend.position = c(0.8, 0.15),
+    legend.background = element_rect(fill = "white", color = NA),
+    panel.grid.major.x = element_line(color = "grey90", linetype = "dotted"),
+    # Adds padding to top margin so unclipped text renders with margin space
+    plot.margin = margin(t = 20, r = 10, b = 5, l = 5, unit = "pt")
+  )
+
+print(p)
+ggsave("C:/Users/Julia/Downloads/Avian_Z_Sizes_reduced_mean.png", plot = p, dpi = 300)
+
+```
+
+## 6.plot only neo-sex species
+
+```{r}
+#define vector with ony species with neo_sex fusions
+
+df_neo_only <- df_plot %>%
+  filter(Highlight == "sex_fusions")
+
+
+p <- ggplot(df_neo_only, aes(x = Size_Mb, y = Species, fill = Highlight)) +
+  geom_col(width = 0.75) +
+  # Custom x-axis tick marks spaced every 10 Mb 
+  scale_x_continuous(
+    breaks = seq(10, 180, by = 10),
+    limits = c(0, max(df_neo_only$Size_Mb) * 1.05), # Ensures all bars fit neatly
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    name = "",
+    breaks = c("sex_fusions"),
+    values = c("sex_fusions" = "#D55E00"),
+  ) +
+  labs(
+    x = "Z Chromosome Size (Mb)",
+    y = NULL
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(face = "italic", size = 10),
+    axis.text.x = element_text(size = 9, color = "black"),
+    axis.title.x = element_text(size = 10, face = "bold"),
+    legend.position = "top",
+    legend.text = element_text(size = 9),
+    panel.grid.major.x = element_line(color = "grey90", linetype = "dotted")
+  )
+
+print(p)
+
+
+ggsave("C:/Users/Julia/Downloads/Avian_Z_Sizes_only_neo.png", plot = p, dpi = 300)
+```
