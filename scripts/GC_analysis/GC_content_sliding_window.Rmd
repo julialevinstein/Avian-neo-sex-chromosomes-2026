@@ -1,0 +1,227 @@
+---
+title: "GC_content_sliding_window"
+author: "Julia Levinstein"
+date: "2026-09-24"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+## Python script to calculate GC content along 50kb windows every 10kb steps on the genome. This creates over-lapping windows in which the GC is calculated. 
+
+### This version of the script filters out windows which is made up of more than 50% of assembly gaps (N).
+
+```{python, eval=FALSE}
+#!/usr/bin/env python3
+import os
+from glob import glob
+from Bio import SeqIO
+
+def sliding_window_gc(seq, window_size=50000, step_size=10000, max_n_percent=50.0):
+    seq_len = len(seq)
+    window_data = []
+
+    for start in range(0, seq_len, step_size):
+        end = start + window_size
+        if end > seq_len:
+            end = seq_len
+
+        # .upper() converts soft-masked 'a,t,c,g' into standard 'A,T,C,G'
+        subseq = str(seq[start:end]).upper()
+        total_len = len(subseq)
+
+        if total_len == 0:
+            break
+
+        # Count base composition on uppercase string
+        g_count = subseq.count('G')
+        c_count = subseq.count('C')
+        a_count = subseq.count('A')
+        t_count = subseq.count('T')
+        n_count = subseq.count('N')
+
+        valid_bases = g_count + c_count + a_count + t_count
+        n_percent = (n_count / total_len) * 100
+
+
+#filtering out the assembly gaps
+
+        # Only include windows that have <= 50% assembly gaps (N's)
+        if valid_bases > 0 and n_percent <= max_n_percent:
+            gc = ((g_count + c_count) / valid_bases) * 100
+            midpoint = start + (total_len // 2)
+            window_data.append((start, end, midpoint, gc, round(n_percent, 2)))
+
+        if end == seq_len:
+            break
+
+    return window_data
+
+def process_species_directories(parent_dir=".", window_size=50000, step_size=10000):
+    subdirs = [d for d in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, d))]
+
+    if not subdirs:
+        print("No subdirectories found.")
+        return
+
+    print(f"Calculating GC content across {len(subdirs)} species directories...")
+    print(f"Parameters: Window = {window_size//1000}kb | Step = {step_size//1000}kb\n")
+
+    for species in sorted(subdirs):
+        species_path = os.path.join(parent_dir, species)
+        fasta_matches = glob(os.path.join(species_path, "*_genome.fna"))
+
+        if not fasta_matches:
+            fasta_matches = glob(os.path.join(species_path, "*.fasta")) + glob(os.path.join(species_path, "*.fa"))
+
+        if not fasta_matches:
+            print(f"[SKIP] {species}: No FASTA file found.")
+            continue
+
+        fasta_file = fasta_matches[0]
+        output_tsv = os.path.join(species_path, f"{species}_whole_genome_noN_GC_sliding_window.tsv")
+
+        print(f"[PROCESSING] {species} -> {os.path.basename(fasta_file)}")
+
+        with open(output_tsv, "w") as out:
+            out.write("scaffold\twindow_start\twindow_end\tmidpoint_bp\tgc_percent\tgap_percent\n")
+            for record in SeqIO.parse(fasta_file, "fasta"):
+                windows = sliding_window_gc(record.seq, window_size, step_size)
+                for start, end, mid, gc, gap_pct in windows:
+                    out.write(f"{record.id}\t{start}\t{end}\t{mid}\t{gc:.2f}\t{gap_pct}\n")
+
+if __name__ == "__main__":
+    process_species_directories(window_size=50000, step_size=10000)
+
+
+```
+
+
+
+
+### in this version no filtering of gap rich regions is done. 
+
+```{python, eval=FALSE}
+#!/usr/bin/env python3
+import os
+from glob import glob
+from Bio import SeqIO
+
+
+def sliding_window_gc(seq, window_size=50000, step_size=10000):
+    seq_len = len(seq)
+    window_data = []
+
+    for start in range(0, seq_len, step_size):
+        end = start + window_size
+        if end > seq_len:
+            end = seq_len
+
+        # Convert soft-masked a/t/c/g to uppercase
+        subseq = str(seq[start:end]).upper()
+        total_len = len(subseq)
+
+        if total_len == 0:
+            break
+
+        # Count base composition
+        g_count = subseq.count('G')
+        c_count = subseq.count('C')
+        a_count = subseq.count('A')
+        t_count = subseq.count('T')
+
+        valid_bases = g_count + c_count + a_count + t_count
+
+        # Calculate GC content using only A/T/G/C bases
+        if valid_bases > 0:
+            gc = ((g_count + c_count) / valid_bases) * 100
+            midpoint = start + (total_len // 2)
+            window_data.append((start, end, midpoint, gc))
+
+        if end == seq_len:
+            break
+
+    return window_data
+
+
+def process_species_directories(
+    parent_dir=".",
+    window_size=50000,
+    step_size=10000
+):
+    subdirs = [
+        d for d in os.listdir(parent_dir)
+        if os.path.isdir(os.path.join(parent_dir, d))
+    ]
+
+    if not subdirs:
+        print("No subdirectories found.")
+        return
+
+    print(
+        f"Calculating GC content across {len(subdirs)} species directories..."
+    )
+    print(
+        f"Parameters: Window = {window_size//1000}kb | "
+        f"Step = {step_size//1000}kb\n"
+    )
+
+    for species in sorted(subdirs):
+        species_path = os.path.join(parent_dir, species)
+
+        fasta_matches = glob(
+            os.path.join(species_path, "*_genome.fna")
+        )
+
+        if not fasta_matches:
+            fasta_matches = (
+                glob(os.path.join(species_path, "*.fasta"))
+                + glob(os.path.join(species_path, "*.fa"))
+            )
+
+        if not fasta_matches:
+            print(f"[SKIP] {species}: No FASTA file found.")
+            continue
+
+        fasta_file = fasta_matches[0]
+
+        output_tsv = os.path.join(
+            species_path,
+            f"{species}_whole_genome_GC_sliding_window.tsv"
+        )
+
+        print(
+            f"[PROCESSING] {species} -> "
+            f"{os.path.basename(fasta_file)}"
+        )
+
+        with open(output_tsv, "w") as out:
+            out.write(
+                "scaffold\twindow_start\twindow_end\t"
+                "midpoint_bp\tgc_percent\n"
+            )
+
+            for record in SeqIO.parse(fasta_file, "fasta"):
+                windows = sliding_window_gc(
+                    record.seq,
+                    window_size,
+                    step_size
+                )
+
+                for start, end, mid, gc in windows:
+                    out.write(
+                        f"{record.id}\t{start}\t{end}\t"
+                        f"{mid}\t{gc:.2f}\n"
+                    )
+
+
+if __name__ == "__main__":
+    process_species_directories(
+        window_size=50000,
+        step_size=10000
+    )
+```
+
