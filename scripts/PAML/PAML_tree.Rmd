@@ -1,0 +1,43 @@
+---
+title: "PAML_tree.sh"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to add to .treefile file a header with number of trees and number of taxa. Necessary step run PAML/codeml
+
+```{bash, eval=FALSE}
+import sys
+import os
+from Bio import Phylo
+
+# Get the main directory from the first argument
+main_dir = sys.argv[1]
+
+for root, dirs, files in os.walk(main_dir):
+    for filename in files:
+        if filename.endswith("constrained.treefile"):
+            file_path = os.path.join(root, filename)
+
+            # 1. Load tree and count species
+            tree = Phylo.read(file_path, "newick")
+            species_count = len(tree.get_terminals())
+
+            # 2. Read the original tree string
+            with open(file_path, 'r') as f:
+                content = f.read().strip()
+
+            # 3. Overwrite the original file with the new format
+            with open(file_path, 'w') as f:
+                f.write(f"{species_count}  1\n")
+                f.write(content)
+
+
+```
+
