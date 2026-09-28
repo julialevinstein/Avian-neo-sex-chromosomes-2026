@@ -1,0 +1,67 @@
+---
+title: "extract_length.py"
+author: "Julia Levinstein"
+date: "2026-09-28"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to extract the legnth (number of codons) of each gene from the codeml outpute file ({gene}_mlc). This can be useful if applying different weights for longer/smaller sequences.
+
+```{python, eval=FALSE}
+import re
+from pathlib import Path
+import pandas as pd
+
+BASE_DIR = Path("/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating/Psittaciformes/neo_genes/PAML_constraint_str")
+MLC_FILENAME_TEMPLATE = "{gene}_mlc"  # adjust: whatever your codeml
+                                                # output file is actually called
+
+# Typical codeml header line looks like:  "ns =  15  ls = 456"
+LS_PATTERN = re.compile(r"ls\s*=\s*(\d+)")
+
+
+def extract_alignment_length(gene, base_dir=BASE_DIR):
+    mlc_file = base_dir / gene / MLC_FILENAME_TEMPLATE.format(gene=gene)
+    if not mlc_file.exists():
+        return None
+    with open(mlc_file) as f:
+        for line in f:
+            m = LS_PATTERN.search(line)
+            if m:
+                return int(m.group(1))
+    return None
+
+
+if __name__ == "__main__":
+    # Run once per gene list (auto / ancestral-Z / neo-Z) and merge the
+    # resulting column into your existing *_values.tsv files.
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage: python extract_alignment_length.py auto_genes_values.tsv")
+        sys.exit(1)
+
+    values_file = sys.argv[1]
+    df = pd.read_csv(values_file, sep="\t")
+
+    df["ls_codons"] = df["Gene"].apply(lambda g: extract_alignment_length(g))
+
+    missing = df[df["ls_codons"].isna()]
+    if len(missing):
+        print(f"WARNING: could not find 'ls' for {len(missing)} genes -- "
+              f"check MLC_FILENAME_TEMPLATE / file paths:")
+        print(missing["Gene"].tolist())
+
+    out_file = values_file.replace(".tsv", "_with_ls.tsv")
+    df.to_csv(out_file, sep="\t", index=False)
+    print(f">>> Saved {out_file} ({df['ls_codons'].notna().sum()}/{len(df)} genes matched)")
+
+
+```
+
