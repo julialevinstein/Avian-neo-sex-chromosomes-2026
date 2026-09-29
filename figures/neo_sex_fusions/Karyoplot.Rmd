@@ -1,0 +1,264 @@
+---
+title: "karyoplot"
+author: "Julia Levinstein"
+date: "2026-09-29"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to produce the karyoplots figures which indicate the extent of the neo-sex fusion based on the mapping of the reference autosomal chromosome
+
+## 1. Configuration and data set-up
+```{r}
+
+#load libraries
+library(readxl)
+library(IRanges)
+library(GenomicRanges)
+library(karyoploteR)
+library(png)
+
+#re-start graphics
+graphics.off()
+
+# Working directory
+setwd("C:/Users/Julia/Desktop/IRT3")
+# chicken centromeres data
+chicken_centromeres <- read_excel("C:/Users/Julia/Desktop/IRT3/Results.xlsx", sheet = "Chicken centromere")
+names(chicken_centromeres) <- c("Chr", "Start", "End")
+chicken_centromeres$Start <- chicken_centromeres$Start + 1
+centromeres.gr <- GRanges(
+  chicken_centromeres$Chr,
+  IRanges(chicken_centromeres$Start, chicken_centromeres$End)
+)
+
+# chicken genome indexed file
+fai_file <- "GCA_024206055.1_ASM2420605v1_genomic_renamed.fna.fai"
+chr_table <- read.table(fai_file, header = FALSE, stringsAsFactors = FALSE)
+colnames(chr_table) <- c("Chr", "Length", "Offset", "BasesPerLine", "LineWidth")
+chr_numbers <- sub(".*_chromosome_([0-9A-Za-z]+)$", "\\1", chr_table$Chr)
+chr_table$Chr <- paste0("chr", chr_numbers)
+
+genome_gr <- GRanges(
+  seqnames = chr_table$Chr,
+  ranges = IRanges(start = 1, end = chr_table$Length)
+)
+
+all_chrs <- seqlevels(genome_gr)
+autosome_chrs <- all_chrs[!(all_chrs %in% c("chrW", "chrZ"))]
+
+# fission coordinates data
+fission_pos <- read_excel("C:/Users/Julia/Desktop/IRT3/Results.xlsx", sheet = "Fission coordinates")
+names(fission_pos) <- c("Species", "Scaffold", "Chr", "Start", "End", "Length")
+fission.gr <- GRanges(
+  seqnames = fission_pos$Chr,
+  ranges = IRanges(fission_pos$Start, fission_pos$End),
+  Species = fission_pos$Species
+)
+
+
+```
+
+
+## 2. Plotting
+```{r}
+
+# DEFINE CUSTOM CHROMOSOME COLORS HERE
+# Specify colors using names (e.g., "blue"), hex codes (e.g., "#FF5733"), etc.
+# -----------------------------------------------------------------------------
+custom_chr_colors <- c(
+  "chr6" = "darkcyan",
+  "chr8" = "olivedrab3",
+  "chr22" = "goldenrod2",
+  "chr23" = "maroon",
+  "chr28" = "chocolate4"
+  # Add more chromosomes and colors as needed:
+  # "chr7" = "gold",
+  # "chr8" = "pink"
+)
+
+default_palette <- setNames(
+  rainbow(length(autosome_chrs), s = 0.75, v = 0.85),
+  autosome_chrs
+)
+
+chr_color_palette <- default_palette
+# Override default palette with custom user colors where provided
+matching_custom <- intersect(names(custom_chr_colors), names(chr_color_palette))
+chr_color_palette[matching_custom] <- custom_chr_colors[matching_custom]
+
+
+#subset of species to plot 
+SPECIES_TO_PLOT <- c("Cal_nic", "Acr_tri", "Pte_gut", "Lep_dis", "Pla_leu", "The_cae")
+# SPECIES_TO_PLOT <- NULL   # <- uncomment this line instead to plot ALL species
+
+
+species_list <- unique(fission_pos$Species)
+species_list <- species_list[!is.na(species_list) & species_list != ""]
+
+if (!is.null(SPECIES_TO_PLOT)) {
+  missing_requested <- setdiff(SPECIES_TO_PLOT, species_list)
+  if (length(missing_requested) > 0) {
+    warning(sprintf(
+      "These SPECIES_TO_PLOT values were not found in fission_pos$Species and will be skipped: %s",
+      paste(missing_requested, collapse = ", ")
+    ))
+  }
+  species_list <- species_list[species_list %in% SPECIES_TO_PLOT]
+}
+
+species_info <- data.frame(
+  Species = species_list,
+  stringsAsFactors = FALSE
+)
+species_info$Chr <- sapply(species_info$Species, function(sp) {
+  as.character(seqnames(fission.gr[fission.gr$Species == sp])[1])
+})
+species_info$Length <- chr_table$Length[match(species_info$Chr, chr_table$Chr)]
+
+missing_info <- species_info[is.na(species_info$Chr) | is.na(species_info$Length), ]
+if (nrow(missing_info) > 0) {
+  print(missing_info)
+  stop("Some species have no matching chromosome/length -- see rows above.")
+}
+
+#order figure so that larger chromosome appears on top.
+species_info <- species_info[order(-species_info$Length), ]
+n_species <- nrow(species_info)
+
+
+TARGET_MAX_PANEL_PX_W <- 5000   # widest chromosome in THIS run renders at this width
+max_len_mb_this_run <- max(species_info$Length) / 1e6
+PX_PER_MB <- TARGET_MAX_PANEL_PX_W / max_len_mb_this_run
+cat(sprintf(">>> This run: widest chromosome = %.1f Mb -> PX_PER_MB = %.2f\n",
+            max_len_mb_this_run, PX_PER_MB))
+
+PANEL_PX_H  <- 1000   # fixed pixel height per panel (~3.3in at res=300).
+
+PNG_RES     <- 300
+MIN_PANEL_PX_W <- 400  # true crash-safety floor now (not the primary scale
+
+panel_dir <- file.path(tempdir(), "species_panels")
+dir.create(panel_dir, showWarnings = FALSE)
+
+panel_files  <- character(n_species)
+panel_widths <- integer(n_species)
+failed_species <- character(0)
+
+for (i in seq_len(n_species)) {
+  sp  <- species_info$Species[i]
+  chr <- species_info$Chr[i]
+  len_mb <- species_info$Length[i] / 1e6
+  
+  this_width <- max(round(len_mb * PX_PER_MB), MIN_PANEL_PX_W)
+  panel_widths[i] <- this_width
+  
+  out_path <- file.path(panel_dir, paste0("panel_", i, "_", sp, ".png"))
+  panel_files[i] <- out_path
+  
+  result <- tryCatch({
+    png(out_path, width = this_width, height = PANEL_PX_H, res = PNG_RES)
+    
+    # main = "" removes the species title above the plot
+    # labels.plotter = NULL removes the "chr" prefix in front of the ideogram
+    kp <- plotKaryotype(
+      genome = genome_gr,
+      chromosomes = chr,
+      main = "",
+      cex = 0.7,
+      labels.plotter = NULL
+    )
+    
+    this_chr_col <- chr_color_palette[[chr]]
+    
+    kpPlotRegions(
+      kp,
+      data = fission.gr[fission.gr$Species == sp],
+      data.panel = "ideogram",
+      col = this_chr_col,
+      border = "black"
+    )
+    
+    kpPlotRegions(
+      kp,
+      data = centromeres.gr[seqnames(centromeres.gr) == chr],
+      data.panel = "ideogram",
+      col = "red",
+      border = "black"
+    )
+    
+    kpAddBaseNumbers(kp, add.units = TRUE, cex = 0.5)
+    
+    dev.off()
+    TRUE
+  }, error = function(e) {
+    if (dev.cur() > 1) dev.off()  # make sure the device doesn't stay open on failure
+    message(sprintf(
+      "FAILED: species='%s' chr='%s' width_px=%d height_px=%d -- %s",
+      sp, chr, this_width, PANEL_PX_H, conditionMessage(e)
+    ))
+    FALSE
+  })
+  
+  if (!isTRUE(result)) {
+    failed_species <- c(failed_species, sp)
+  }
+}
+
+if (length(failed_species) > 0) {
+  cat("\n>>> The following species FAILED to plot and were skipped:\n")
+  print(failed_species)
+  cat(">>> See the FAILED: messages above for the exact width/error per species.\n")
+  cat(">>> Common fix: raise MIN_PANEL_PX_W and/or PANEL_PX_H further.\n\n")
+  # Drop failed species from the compositing step below so it doesn't
+  # crash on a missing file
+  keep <- !(species_info$Species %in% failed_species)
+  species_info <- species_info[keep, ]
+  panel_files  <- panel_files[keep]
+  panel_widths <- panel_widths[keep]
+  n_species <- nrow(species_info)
+}
+
+canvas_width  <- max(panel_widths)
+canvas_height <- PANEL_PX_H * n_species
+
+# Convert pixel-based dimensions to inches for PDF device (using PNG_RES / 300 DPI)
+pdf_width_in  <- canvas_width / PNG_RES
+pdf_height_in <- canvas_height / PNG_RES
+
+pdf("all_species_karyoplot.pdf", width = pdf_width_in, height = pdf_height_in)
+par(mar = c(0, 0, 0, 0))
+plot.new()
+plot.window(xlim = c(0, canvas_width), ylim = c(0, canvas_height), xaxs = "i", yaxs = "i")
+
+for (i in seq_len(n_species)) {
+  img <- readPNG(panel_files[i])
+  y_top    <- canvas_height - (i - 1) * PANEL_PX_H
+  y_bottom <- canvas_height - i * PANEL_PX_H
+  # left-aligned at x = 0, width = this panel's true pixel width (Stage 1)
+  rasterImage(img, xleft = 0, ybottom = y_bottom, xright = panel_widths[i], ytop = y_top)
+}
+
+
+chrs_in_this_run <- unique(species_info$Chr)
+legend_labels <- c(chrs_in_this_run, "Centromere")
+legend_colors <- c(chr_color_palette[chrs_in_this_run], "red")
+
+legend(
+  x = canvas_width * 0.80, y = canvas_height * 0.99,
+  legend = legend_labels,
+  fill = legend_colors,
+  border = "black",
+  bty = "n",
+  cex = 1.1,
+  xjust = 0, yjust = 1
+)
+
+
+dev.off()
+```
+
