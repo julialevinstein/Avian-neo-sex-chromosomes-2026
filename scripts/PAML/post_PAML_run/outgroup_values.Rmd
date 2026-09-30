@@ -1,0 +1,74 @@
+---
+title: "outgroup_values"
+author: "Julia Levinstein"
+date: "2026-09-30"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Python script to extract the outgroup branches from the neo-sex gene trees. Assuming these branches represent autosomal genes in the outgroups, this can also be used to estimate mu_A within the same gene
+
+```{python, eval=FALSE}
+from pathlib import Path
+from ete3 import Tree
+import pandas as pd
+import numpy as np
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+BASE_DIR = Path(".")
+NEO_GENE_FILE = "neo_genes_values.tsv"
+
+OUTGROUP_TAXA = ["Tae_gut", "Ans_ans"]  # terminal branches to pull
+
+
+def get_terminal_branch_lengths(gene, base_dir=BASE_DIR):
+    """
+    Terminal (pendant) branch length to each outgroup tip. Unlike the
+    stem/crown extraction, this does NOT require rerooting -- a leaf's
+    own branch length is the same regardless of where the tree is rooted.
+    """
+    tree_file = base_dir / gene / f"{gene}_dS_tree.nwk"
+    if not tree_file.exists():
+        return {taxon: np.nan for taxon in OUTGROUP_TAXA}
+
+    tree = Tree(str(tree_file))
+    leaf_names = set(tree.get_leaf_names())
+    result = {}
+    for taxon in OUTGROUP_TAXA:
+        if taxon in leaf_names:
+            result[taxon] = tree.search_nodes(name=taxon)[0].dist
+        else:
+            result[taxon] = np.nan
+    return result
+
+
+if __name__ == "__main__":
+    df_neo = pd.read_csv(NEO_GENE_FILE, sep="\t")
+
+    branch_data = df_neo["Gene"].apply(get_terminal_branch_lengths)
+    branch_df = pd.DataFrame(list(branch_data))
+    branch_df.columns = [f"{taxon}_branch_dS" for taxon in OUTGROUP_TAXA]
+
+    df_out = pd.concat([df_neo, branch_df], axis=1)
+
+    missing_fal = df_out["Tae_gut_branch_dS"].isna().sum()
+    missing_ans = df_out["Ans_ans_branch_dS"].isna().sum()
+    print(f">>> Missing Fal_per branch for {missing_fal}/{len(df_out)} genes")
+    print(f">>> Missing Ans_ans branch for {missing_ans}/{len(df_out)} genes")
+    if missing_fal or missing_ans:
+        print("    (genes missing both will fall back to the borrowed-mu_A")
+        print("     approach in the model -- see fusion_model_locus_matched.py)")
+
+    out_file = NEO_GENE_FILE.replace(".tsv", "_with_outgroup_branches.tsv")
+    df_out.to_csv(out_file, sep="\t", index=False)
+    print(f">>> Saved {out_file}")
+
+```
+
