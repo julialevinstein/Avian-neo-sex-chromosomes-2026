@@ -68,7 +68,7 @@ while IFS= read -r SPECIES || [[ -n "$SPECIES" ]]; do
                 echo "Match found for Gene: $GENE. Extracting..."
 
                 #header is Species, filename is Gene
-                seqkit grep -r -p "#${GENE}#.*QUERY" "$CLEAN_FASTA" | \
+                seqkit grep -r -n -p "#${GENE}#.*QUERY" "$CLEAN_FASTA" | \
                  sed "s/^>.*/>${SPECIES}/" > "${GENE}"
 
                 if [[ -s "${GENE}" ]]; then
