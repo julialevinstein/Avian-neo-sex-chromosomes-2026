@@ -1,0 +1,244 @@
+---
+title: "PAML_pipeline"
+author: "Julia Levinstein"
+date: "2026-10-04"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Complete pipeline to run PAML 
+
+
+# 1. Pre PAML run
+
+### Configuration
+```{bash, eval=FALSE}
+#set your working directory
+WORKING_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating"
+```
+
+
+### a. Get genes (from NCBI or from TOGA)
+#### a.1. NCBI (run Exonerate)
+```{bash, eval=FALSE}
+
+#reference CDS
+
+REF_CDS="GCF_016699485.2_bGalGal1.mat.broiler.GRCg7b_cds_from_genomic.fna"
+REF_CDS_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/016/699/485/GCF_016699485.2_bGalGal1.mat.broiler.GRCg7b/GCF_016699485.2_bGalGal1.mat.broiler.GRCg7b_cds_from_genomic.fna.gz"
+REF_CHR="" #RefSeq/GenBank of chromosome involved in fusion event (eg: NC_133024.1)
+FUSION_CHR="" #chromosome involved in fucion (eg: chr1,chr4)
+#get reference CDS
+wget -O "$WORKING_DIR/Ref/${REF_CDS}.gz" "$REF_CDS_URL"
+gunzip "$WORKING_DIR/Ref/${REF_CDS}.gz"
+
+#keep reference fusion chromosome
+conda activate bio
+seqkit grep -r -p "$REF_CHR" "$WORKING_DIR/Ref/$REF_CDS" > "$WORKING_DIR/Ref/Ref_chr${FUSION_CHR}_cds.fasta"
+
+#keep only longest isoform
+python3 "$WORKING_DIR/Scripts/long_isoform.py" "$WORKING_DIR/Ref/Ref_chr${FUSION_CHR}_cds.fasta" | \
+seqkit replace -p '.*\[gene=([^\]]+)\].*' -r '$1' > "$WORKING_DIR/Ref/Ref_chr${FUSION_CHR}_cds_filter.fasta"
+
+#Species of interest
+SPECIES="Syl_atr"
+FUSION_CHR="Z" #Z or W
+CLADE="Sylviida"
+WORKING_DIR="/dss/dsslegfs01/pr53da/pr53da-dss-0036/projects/2025__neosex/neosex_project/fusion_dating"
+REF_DIR="$WORKING_DIR/Ref"
+GENES="neo_genes" #ancestral_genes, neo_genes or autosomal_genes
+
+cd $WORKING_DIR
+mkdir $CLADE
+cd $CLADE
+cd Species
+mkdir $SPECIES
+cd $SPECIES
+mkdir data
+mkdir results
+mkdir logs
+cd $WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data
+
+CHR_Z="NC_089174.1" #NCBI/GenBank accession
+SPECIES_GENOME_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/819/655/GCF_009819655.1_bSylAtr1.pri/GCF_009819655.1_bSylAtr1.pri_genomic.fna.gz"
+SPECIES_GENOME="${SPECIES}_genomic.fna"
+
+#get genome
+wget -O "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/${SPECIES_GENOME}.gz" "$SPECIES_GENOME_URL"
+gunzip "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/${SPECIES_GENOME}.gz"
+
+#keep only chrZ scaffold
+seqkit grep -r -p "$CHR_Z" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/$SPECIES_GENOME" > "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/${SPECIES}_chrZ.fasta"
+
+#keep only chrW scaffold
+seqkit grep -r -p "$CHR_W" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/$SPECIES_GENOME" > "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/data/${SPECIES}_chrW.fasta"
+
+
+#run Exonerate against reference genome filtered for the chromosome involved in fusion
+vim "$WORKING_DIR/Scripts/run_exonerate.sh"
+sbatch "$WORKING_DIR/Scripts/run_exonerate.sh"
+
+
+#get a list of W-linked genes (for species with W assembly)
+CHR=W
+
+#get gene list
+grep "Query:" "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/results/${SPECIES}_${CHR}_cds_mappings_chr${FUSION_CHR}.gff"| awk '{print $2}' > "$WORKING_DIR/$CLADE/$GENES/Species/$SPECIES/results/${SPECIES}_${CHR}_list.txt
+
+
+#extract genes sequences from exonerate gff file
+mkdir $WORKING_DIR/$CLADE/$GENES/gene_sequences
+vim $WORKING_DIR/Scripts/gfftofasta.py 
+
+python $WORKING_DIR/Scripts/ggftofasta.py
+
+```
+
+
+
+#### a.2. TOGAII
+```{bash, eval=FALSE}
+#go to https://genome.senckenberg.de/download/TOGA2/TOGA2/reference_chicken_HLgalGal7-GCF_016699485.2/
+
+#select your species
+
+#right click on "codon_aln.fa.gz" and copy link
+
+#on the server
+SPECIES= "" #species of interest
+CODON_FILE="" #paste the link
+cd $WORKING_DIR/$GENES/$CLADE/Species/$SPECIES
+wget $CODON_FILE
+gunzip $CODON_FILE
+
+#extract the genes from a list.txt 
+vim $WORKING_DIR/Scripts/get_genes.sh
+sbatch $WORKING_DIR/Scripts/get_genes.sh
+
+#remove duplicates (keep only longest isoform)
+vim $WORKING_DIR/Scripts/remove_duplicates.sh
+sbatch $WORKING_DIR/Scripts/remove_duplicates.sh
+```
+
+
+### b. Save genes (create a single multi fasta file for each gene) from TOGA or NCBI
+```{bash, eval=FALSE}
+#create directory to run PAML
+mkdir PAML
+
+#save genes into the directory
+vim $WORKING_DIR/Scripts/save_genes.sh
+sbatch  $WORKING_DIR/Scripts/save_genes.sh
+```
+
+### c. Align genes (align the sequences using MACSE)
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/run_macse.sh
+sbatch $WORKING_DIR/Scripts/run_macse.sh
+```
+
+### d. Clean alignment (remove gappy regions using gblocks)
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/run_gblocks.sh
+sbatch $WORKING_DIR/Scripts/run_gblocks.sh
+```
+
+### e. Create a phylip formatted file (from the cleaned alignment file)
+```{bash, eval=FALSE}
+#get current directory
+pwd
+MAIN_DIR="" #path to current directory
+vim $WORKING_DIR/Scripts/fasta2phylip.py
+python $WORKING_DIR/Scripts/fasta2phylip.py $MAIN_DIR
+```
+
+
+### f. Create a phylogenetic contraint file
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/outgroup_constraint.py
+python $WORKING_DIR/Scripts/outgroup_constraint.py
+```
+
+### g. Run IQTREE on the constraint files
+```{bash, eval=FALSE}
+#run all the constrained iq-tree jobs together
+vim $WORKING_DIR/Scripts/run_iqtree_job.sh
+sbatch $WORKING_DIR/Scripts/run_iqtree_job.sh
+```
+
+### h. Add header to the treefile
+```{bash, eval=FALSE}
+#after running iqtree, add a header to the treefile with the number of trees and number of taxa
+vim $WORKING_DIR/Scripts/PAML_tree.py
+python $WORKING_DIR/Scripts/PAML_tree.py $MAIN_DIR
+```
+
+### optional: if running model=2, label the branches
+```{bash, eval=FALSE}
+#if running model=2 the branches need to be labeled (outgroups X ingroup) to allow for differnt dN/dS estimations
+vim $WORKING_DIR/Scripts/batch_label_trees.py
+python $WORKING_DIR/Scripts/batch_label_trees.py
+```
+
+### i. Set control files 
+```{bash, eval=FALSE}
+#the control files specify the run parameters for the PAML run
+vim $WORKING_DIR/Scripts/codeml_control.py
+python $WORKING_DIR/Scripts/codeml_control.py $MAIN_DIR
+```
+
+### j. Run PAML/codeml in the directory with all the genes subdirectories
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/run_codeml.sh
+sbatch $WORKING_DIR/Scripts/run_codeml.sh
+```
+
+
+
+# 2.Post PAML run
+
+### a. Save the dS tree
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/get_dS_tree.py
+python $WORKING_DIR/Scripts/get_dS_tree.py
+```
+
+### b. Get the dS (Stem and Crown) from the dS tree file
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/get_dS.py
+python $WORKING_DIR/Scripts/get_dS.py
+```
+
+### c. Get the gene sizes 
+```{bash, eval=FALSE}
+#can be useful when applying weigths to longer/shorter genes
+vim $WORKING_DIR/Scripts/extract_length.py
+python $WORKING_DIR/Scripts/extract_length.py gene_stem_crown_lengths.tsv
+
+```
+
+### d. Get each segment separately to allow the model to expand
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/extract_segments.py
+python $WORKING_DIR/Scripts/extract_segments.py
+
+```
+
+
+### e. Get each crown value for each genes
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/extract_crown_ds.py
+python $WORKING_DIR/Scripts/extract_crown_ds.py
+```
+
+
+### f. Get the outgroup autosomal values in case you want to estimate mu_A from there
+```{bash, eval=FALSE}
+vim $WORKING_DIR/Scripts/outgroup_values.py
+python $WORKING_DIR/Scripts/outgroup_values.py
+```
+
