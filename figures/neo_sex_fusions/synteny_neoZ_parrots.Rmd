@@ -1,0 +1,181 @@
+---
+title: "Parrot_Z_Synteny_Plot"
+author: "Julia Levinstein"
+date: "2026-10-09"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+
+# Script to build a synteny plot of the neo-Z chromosome of Parrots
+
+## 1. Configuration
+```{r setup}
+knitr::opts_knit$set(root.dir = "C:/Users/Julia/Desktop/IRT3")
+
+library(ggplot2)
+library(gggenomes)
+library(tidyverse)
+
+```
+
+## 2. Load data
+```{r}
+#species information
+
+s <- read_csv("Z_seq.csv")
+
+#neo genes
+f_neo <- read_csv("Z_genes.csv")
+l_neo<- read_csv("Z_links.csv")
+
+#ancestral Z genes
+
+f_anc <- read_csv("ancestral_Z_genes.csv")
+l_anc <- read_csv("ancestral_Z_links.csv")
+
+
+#add "source" collumn to specify wheter it is a neo or ancestral gene
+
+f_neo <- read_csv("Z_genes.csv") %>% mutate(source = "Neo")
+f_anc <- read_csv("ancestral_Z_genes.csv") %>% mutate(source = "Anc")
+
+l_neo <- read_csv("Z_links.csv") %>% mutate(source = "Neo")
+l_anc <- read_csv("ancestral_Z_links.csv") %>% mutate(source = "Anc")
+
+
+#combine all genes into one df
+f_combined <- bind_rows(f_neo, f_anc)
+l_combined <- bind_rows(l_neo, l_anc)
+```
+
+## 3.fixing the species order
+```{r}
+#only neo
+species_levels <- readLines("species_order.txt")
+
+
+f_neo$bin_id <- factor(f_neo$bin_id, levels = species_levels)
+l_neo$bin_id <- factor(l_neo$bin_id, levels = species_levels)
+l_neo$bin_id2 <- factor(l_neo$bin_id2, levels = species_levels)
+
+
+s <- s[order(match(s$bin_id, species_levels)), ]
+
+
+
+#combined
+species_levels <- readLines("species_order.txt")
+
+
+f_combined$bin_id <- factor(f_combined$bin_id, levels = species_levels)
+l_combined$bin_id <- factor(l_combined$bin_id, levels = species_levels)
+l_combined$bin_id2 <- factor(l_combined$bin_id2, levels = species_levels)
+
+
+s <- s[order(match(s$bin_id, species_levels)), ]
+
+
+```
+
+
+
+## 4. Flip sequences
+```{r}
+#flip seqs
+to_flip <- c ("CM077909.1", "CM054410.1", "CM098574.1", "NC_088909.1", "NC_044302.2")
+```
+
+
+
+## 5. Plot only the neo genes along the Z chromosome
+```{r}
+
+p <- gggenomes(seqs = s, feats = f_neo, links = l_neo) %>%
+  flip_seqs(all_of(to_flip)) + 
+  geom_seq(linewidth = 0.5) +
+  geom_bin_label() +
+  geom_link(aes(fill= "grey"), alpha = 0.1, show.legend = FALSE) + 
+  geom_gene(aes(fill = gene_id), size = 2, show.legend = FALSE) 
+
+print(p)
+```
+
+## 6. Save image
+```{r}
+ggsave("parrot_neoZ_synteny.pdf", p, width = 18, height = 10)
+
+```
+
+## 7. Loading ancestral Z genes data
+```{r}
+#ancestral Z genes
+anc_gene_ids <- unique(f_anc$gene_id)
+```
+
+
+## 8. Plot
+```{r}
+p <- gggenomes(seqs = s, feats = f_combined, links = l_combined) %>%
+  flip_seqs(all_of(to_flip)) + 
+  geom_seq(linewidth = 0.3, color = "black") +
+  geom_bin_label(size = 3.5) +
+  
+  geom_link(fill = "grey90", alpha = 0.2, show.legend = FALSE) + 
+  geom_gene(fill = "#E66101", color= "#E66101", size = 3) + 
+  
+  geom_gene(data = genes(gene_id %in% anc_gene_ids), 
+            fill = "#e6cc00", color = "#e6cc00", size = 3) +
+  
+theme(legend.position = "none")
+
+plot(p)
+```
+ 
+ 
+## 9. Save plot
+```{r}
+ggsave("parrot_Z_synteny.pdf", p, width = 18, height = 10)
+```
+
+
+## 10. Highlighting a specific gene
+```{r}
+p <- gggenomes(seqs = s, feats = f_combined, links = l_combined) %>%
+  flip_seqs(all_of(to_flip)) + 
+  geom_seq(linewidth = 0.3, color = "black") +
+  geom_bin_label(size = 3.5) +
+  
+  geom_link(fill = "grey90", alpha = 0.2, show.legend = FALSE) + 
+  geom_gene(fill = "#E66101", color= "#E66101", size = 3) + 
+  
+  geom_gene(data = genes(gene_id %in% anc_gene_ids), 
+            fill = "#e6cc00", color = "#e6cc00", size = 3) +
+  geom_gene(data = genes(gene_id == "NUTF2"), 
+            fill = "black", color = "black", size = 4) + #highlight a specific gene
+  geom_gene_tag(data = genes(gene_id == "NUTF2"), 
+                label = "★", 
+                vjust = 0, 
+                size = 5, 
+                color = "black") +
+  
+  theme(legend.position = "none")
+
+print(p)
+```
+
+
+
+
+
+## 11. Save plot
+```{r}
+ggsave("NUTF2_Z_synteny.pdf", p, width = 18, height = 10)
+```
+
+
+
