@@ -145,6 +145,14 @@ sbatch $WORKING_DIR/Scripts/run_macse.sh
 ```{bash, eval=FALSE}
 vim $WORKING_DIR/Scripts/run_gblocks.sh
 sbatch $WORKING_DIR/Scripts/run_gblocks.sh
+
+#remove "!" from alignments
+for dir in */; do
+    gene=${dir%/}
+    f="$gene/${gene}_NT.fasta-gb.fa"
+    [ -f "$f" ] || continue
+    sed '/^>/!s/!/-/g' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 ```
 
 ### e. Create a phylip formatted file (from the cleaned alignment file)
