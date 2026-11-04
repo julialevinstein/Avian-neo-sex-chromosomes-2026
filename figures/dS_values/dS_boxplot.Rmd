@@ -1,0 +1,1029 @@
+---
+title: "dS_boxplot"
+author: "Julia Levinstein"
+date: "2026-11-04"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+    
+---
+
+# R script to plot dS boxplot to compare between different clades and different gene categories (ancestral,autosomal and neo-Z)
+
+
+## Configuration
+```{r setup,include=FALSE}
+knitr::opts_knit$set(root.dir = "C:/Users/Julia/Desktop/IRT3")
+library(castor)
+library(ape)
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(rstatix)
+library(ggpubr)
+```
+
+
+
+## 1. Meliphagidae data
+```{r}
+# 1. NEO
+paml_neo_mel <- "C:/Users/Julia/Desktop/IRT3/Meliphagidae/PAML_neo_NR"
+
+
+nwk_trees_neo_mel <- list.files(path=paml_neo_mel, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_neo_mel)
+
+results_table_neo_mel <- data.frame(Gene = character(),
+                                Average_Ingroup_Distance = numeric(),
+                                stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_neo_mel) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) !="Tae_gut"] 
+  #ingroup_distances <- tip_distances[names(tip_distances) != "Pel_cri","Gor_goi",]
+  #ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")] 
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_neo_mel <- rbind(results_table_neo_mel, data.frame(Gene = gene_name, 
+                                                           Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_neo_mel <- mean(results_table_neo_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_neo_mel)
+
+#2. AUTOSOMAL
+paml_autosomal_mel <- "C:/Users/Julia/Desktop/IRT3/Meliphagidae/PAML_autosomal_NR"
+
+
+nwk_trees_autosomal_mel <- list.files(path=paml_autosomal_mel, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_autosomal_mel)
+
+results_table_autosomal_mel <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_autosomal_mel) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Tae_gut"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_autosomal_mel <- rbind(results_table_autosomal_mel, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_autosomal_mel <- mean(results_table_autosomal_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_autosomal_mel)
+
+#3. ANCESTRAL
+paml_ancestral_mel <- "C:/Users/Julia/Desktop/IRT3/Meliphagidae/PAML_ancestral_NR"
+
+
+nwk_trees_ancestral_mel <- list.files(path=paml_ancestral_mel, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_ancestral_mel)
+
+results_table_ancestral_mel <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_ancestral_mel) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Tae_gut"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_ancestral_mel <- rbind(results_table_ancestral_mel, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_ancestral_mel <- mean(results_table_ancestral_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_ancestral_mel)
+
+# 4. DATA FILTERING
+#Meliphagidae filtered
+neo_ds_mel <- results_table_neo_mel$Average_Ingroup_Distance
+Q1 <- quantile(neo_ds_mel, 0.25)
+Q3 <- quantile(neo_ds_mel, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_neo_mel <- results_table_neo_mel[
+  results_table_neo_mel$Average_Ingroup_Distance >= lower_bound & 
+    results_table_neo_mel$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_neo_mel <- mean(filtered_results_table_neo_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_neo_mel)
+
+
+#filtering autosomal
+
+autosomal_ds_mel <- results_table_autosomal_mel$Average_Ingroup_Distance
+Q1 <- quantile(autosomal_ds_mel, 0.25)
+Q3 <- quantile(autosomal_ds_mel, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_autosomal_mel <- results_table_autosomal_mel[
+  results_table_autosomal_mel$Average_Ingroup_Distance >= lower_bound & 
+    results_table_autosomal_mel$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_autosomal_mel <- mean(filtered_results_table_autosomal_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_autosomal_mel)
+
+
+#filtering ancestral
+ancestral_ds_mel <- results_table_ancestral_mel$Average_Ingroup_Distance
+Q1 <- quantile(ancestral_ds_mel, 0.25)
+Q3 <- quantile(ancestral_ds_mel, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_ancestral_mel <- results_table_ancestral_mel[
+  results_table_ancestral_mel$Average_Ingroup_Distance >= lower_bound & 
+    results_table_ancestral_mel$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_ancestral_mel <- mean(filtered_results_table_ancestral_mel$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_ancestral_mel)
+
+```
+
+
+## 2. Threskiornithidae data
+```{r}
+#1. NEO
+paml_neo_ibis <- "C:/Users/Julia/Desktop/IRT3/Ibis/PAML_neo_NR"
+
+nwk_trees_neo_ibis <- list.files(path=paml_neo_ibis, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_neo_ibis)
+
+results_table_neo_ibis <- data.frame(Gene = character(),
+                                Average_Ingroup_Distance = numeric(),
+                                stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_neo_ibis) {
+  
+  file_name <- basename(file_path)
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  tree <- read.tree(file_path)
+  
+  # --- Dynamic Outgroup Selection ---
+  # Check if "Pel_cri" is in the tree. If not, use "Gor_goi"
+  if ("Pel_cri" %in% tree$tip.label) {
+    current_outgroup <- "Pel_cri"
+  } else if ("Gor_goi" %in% tree$tip.label) {
+    current_outgroup <- "Gor_goi"
+  } else {
+    warning(paste("Neither 'Pel_cri' nor 'Gor_goi' found in", gene_name, "- skipping tree."))
+    next # Skip to the next file if neither exists
+  }
+  
+  # Root the tree with the selected outgroup
+  rooted_tree <- root(tree, outgroup = current_outgroup, resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  Ntips <- length(rooted_tree$tip.label)
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  # --- Dynamic Ingroup Distances ---
+  # Exclude BOTH potential outgroups from the ingroup calculations to keep data consistent
+  ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")]
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Outgroup Used:", current_outgroup, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_neo_ibis <- rbind(results_table_neo_ibis, data.frame(Gene = gene_name, 
+                                                           Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_neo_ibis <- mean(results_table_neo_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_neo_ibis)
+
+#2. AUTOSOMAL
+paml_autosomal_ibis <- "C:/Users/Julia/Desktop/IRT3/Ibis/PAML_autosomal_NR"
+
+nwk_trees_autosomal_ibis <- list.files(path=paml_autosomal_ibis, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_autosomal_ibis)
+
+results_table_autosomal_ibis <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_autosomal_ibis) {
+  
+  file_name <- basename(file_path)
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  tree <- read.tree(file_path)
+  
+  # --- Dynamic Outgroup Selection ---
+  # Check if "Pel_cri" is in the tree. If not, use "Gor_goi"
+  if ("Pel_cri" %in% tree$tip.label) {
+    current_outgroup <- "Pel_cri"
+  } else if ("Gor_goi" %in% tree$tip.label) {
+    current_outgroup <- "Gor_goi"
+  } else {
+    warning(paste("Neither 'Pel_cri' nor 'Gor_goi' found in", gene_name, "- skipping tree."))
+    next # Skip to the next file if neither exists
+  }
+  
+  # Root the tree with the selected outgroup
+  rooted_tree <- root(tree, outgroup = current_outgroup, resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  Ntips <- length(rooted_tree$tip.label)
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  # --- Dynamic Ingroup Distances ---
+  # Exclude BOTH potential outgroups from the ingroup calculations to keep data consistent
+  ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")]
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Outgroup Used:", current_outgroup, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_autosomal_ibis <- rbind(results_table_autosomal_ibis, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_autosomal_ibis <- mean(results_table_autosomal_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_autosomal_ibis)
+
+#3. ANCESTRAL
+paml_ancestral_ibis <- "C:/Users/Julia/Desktop/IRT3/Ibis/PAML_ancestral_NR"
+
+nwk_trees_ancestral_ibis <- list.files(path=paml_ancestral_ibis, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_ancestral_ibis)
+
+results_table_ancestral_ibis <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_ancestral_ibis) {
+  
+  file_name <- basename(file_path)
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  tree <- read.tree(file_path)
+  
+  # --- Dynamic Outgroup Selection ---
+  # Check if "Pel_cri" is in the tree. If not, use "Gor_goi"
+  if ("Pel_cri" %in% tree$tip.label) {
+    current_outgroup <- "Pel_cri"
+  } else if ("Gor_goi" %in% tree$tip.label) {
+    current_outgroup <- "Gor_goi"
+  } else {
+    warning(paste("Neither 'Pel_cri' nor 'Gor_goi' found in", gene_name, "- skipping tree."))
+    next # Skip to the next file if neither exists
+  }
+  
+  # Root the tree with the selected outgroup
+  rooted_tree <- root(tree, outgroup = current_outgroup, resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  Ntips <- length(rooted_tree$tip.label)
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  
+  #exclude potential outgroups from the ingroup calculations 
+  ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")]
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Outgroup Used:", current_outgroup, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_ancestral_ibis <- rbind(results_table_ancestral_ibis, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+
+total_average_ancestral_ibis <- mean(results_table_ancestral_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_ancestral_ibis)
+
+#4. DATA FILTERING
+neo_ds_ibis <- results_table_neo_ibis$Average_Ingroup_Distance
+
+Q1 <- quantile(neo_ds_ibis, 0.25)
+Q3 <- quantile(neo_ds_ibis, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_neo_ibis <- results_table_neo_ibis[
+  results_table_neo_ibis$Average_Ingroup_Distance >= lower_bound & 
+    results_table_neo_ibis$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_neo_ibis <- mean(filtered_results_table_neo_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_neo_ibis)
+
+
+
+#autosomal
+
+autosomal_ds_ibis <- results_table_autosomal_ibis$Average_Ingroup_Distance
+Q1 <- quantile(autosomal_ds_ibis, 0.25)
+Q3 <- quantile(autosomal_ds_ibis, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_autosomal_ibis <- results_table_autosomal_ibis[
+  results_table_autosomal_ibis$Average_Ingroup_Distance >= lower_bound & 
+    results_table_autosomal_ibis$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_autosomal_ibis <- mean(filtered_results_table_autosomal_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_autosomal_ibis)
+
+
+
+#ancestral
+ancestral_ds_ibis <- results_table_ancestral_ibis$Average_Ingroup_Distance
+
+Q1 <- quantile(ancestral_ds_ibis, 0.25)
+Q3 <- quantile(ancestral_ds_ibis, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_ancestral_ibis <- results_table_ancestral_ibis[
+  results_table_ancestral_ibis$Average_Ingroup_Distance >= lower_bound & 
+    results_table_ancestral_ibis$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_ancestral_ibis <- mean(filtered_results_table_ancestral_ibis$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_ancestral_ibis)
+
+```
+
+
+## 3. Psittaciformes data
+```{r}
+# 1. NEO
+paml_neo_parrots <- "C:/Users/Julia/Desktop/IRT3/Psittaciformes/PAML_neo_NR"
+
+
+nwk_trees_neo_parrots <- list.files(path=paml_neo_parrots, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_neo_parrots)
+
+results_table_neo_parrots <- data.frame(Gene = character(),
+                                Average_Ingroup_Distance = numeric(),
+                                stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_neo_parrots) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Fal_per", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Fal_per"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_neo_parrots <- rbind(results_table_neo_parrots, data.frame(Gene = gene_name, 
+                                                           Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_neo_parrots <- mean(results_table_neo_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_neo_parrots)
+
+# 2. AUTOSOMAL
+paml_autosomal_parrots <- "C:/Users/Julia/Desktop/IRT3/Psittaciformes/PAML_auto"
+
+
+nwk_trees_autosomal_parrots <- list.files(path=paml_autosomal_parrots, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_autosomal_parrots)
+
+results_table_autosomal_parrots <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_autosomal_parrots) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Fal_per", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Fal_per"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_autosomal_parrots <- rbind(results_table_autosomal_parrots, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_autosomal_parrots <- mean(results_table_autosomal_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_autosomal_parrots)
+
+# 3. ANCESTRAL
+paml_ancestral_parrots <- "C:/Users/Julia/Desktop/IRT3/Psittaciformes/PAML_ancestral"
+
+
+nwk_trees_ancestral_parrots <- list.files(path=paml_ancestral_parrots, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_ancestral_parrots)
+
+results_table_ancestral_parrots <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_ancestral_parrots) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Fal_per", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Fal_per"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_ancestral_parrots <- rbind(results_table_ancestral_parrots, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+total_average_ancestral_parrots <- mean(results_table_ancestral_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_ancestral_parrots)
+
+
+#4. DATA FILTERING
+neo_ds_parrots <- results_table_neo_parrots$Average_Ingroup_Distance
+
+Q1 <- quantile(neo_ds_parrots, 0.25)
+Q3 <- quantile(neo_ds_parrots, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_neo_parrots <- results_table_neo_parrots[
+  results_table_neo_parrots$Average_Ingroup_Distance >= lower_bound & 
+    results_table_neo_parrots$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_neo_parrots <- mean(filtered_results_table_neo_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_neo_parrots)
+
+#autosomal
+autosomal_ds_parrots <- results_table_autosomal_parrots$Average_Ingroup_Distance
+Q1 <- quantile(autosomal_ds_parrots, 0.25)
+Q3 <- quantile(autosomal_ds_parrots, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_autosomal_parrots <- results_table_autosomal_parrots[
+  results_table_autosomal_parrots$Average_Ingroup_Distance >= lower_bound & 
+    results_table_autosomal_parrots$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_autosomal_parrots <- mean(filtered_results_table_autosomal_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_autosomal_parrots)
+
+
+#ancestral
+ancestral_ds_parrots <- results_table_ancestral_parrots$Average_Ingroup_Distance
+
+Q1 <- quantile(ancestral_ds_parrots, 0.25)
+Q3 <- quantile(ancestral_ds_parrots, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_ancestral_parrots <- results_table_ancestral_parrots[
+  results_table_ancestral_parrots$Average_Ingroup_Distance >= lower_bound & 
+    results_table_ancestral_parrots$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_ancestral_parrots <- mean(filtered_results_table_ancestral_parrots$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_ancestral_parrots)
+```
+
+
+## 4. Sylvioidea
+```{r}
+# 1. NEO
+paml_neo_sylviida <- "C:/Users/Julia/Desktop/IRT3/Sylviida/PAML_neo_NR"
+
+
+nwk_trees_neo_sylviida <- list.files(path=paml_neo_sylviida, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_neo_sylviida)
+
+results_table_neo_sylviida <- data.frame(Gene = character(),
+                                Average_Ingroup_Distance = numeric(),
+                                stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_neo_sylviida) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) !="Tae_gut"] 
+  #ingroup_distances <- tip_distances[names(tip_distances) != "Pel_cri","Gor_goi",]
+  #ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")] 
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_neo_sylviida <- rbind(results_table_neo_sylviida, data.frame(Gene = gene_name, 
+                                                           Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+
+total_average_neo_sylv <- mean(results_table_neo_sylviida$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_neo_sylv)
+
+# 2. AUTOSOMAL
+
+paml_autosomal_syl <- "C:/Users/Julia/Desktop/IRT3/Sylviida/PAML_autosomal_NR"
+
+
+nwk_trees_autosomal_syl <- list.files(path=paml_autosomal_syl, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_autosomal_syl)
+
+results_table_autosomal_syl <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_autosomal_syl) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) !="Tae_gut"] 
+  #ingroup_distances <- tip_distances[names(tip_distances) != "Pel_cri","Gor_goi",]
+  #ingroup_distances <- tip_distances[!names(tip_distances) %in% c("Pel_cri", "Gor_goi")] 
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_autosomal_syl <- rbind(results_table_autosomal_syl, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+
+total_average_autosomal_sylv <- mean(results_table_autosomal_syl$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_autosomal_sylv)
+
+# 3. ANCESTRAL
+paml_ancestral_syl <- "C:/Users/Julia/Desktop/IRT3/Sylviida/PAML_ancestral_NR"
+
+
+nwk_trees_ancestral_syl <- list.files(path=paml_ancestral_syl, pattern = "\\.nwk$", full.names=TRUE, recursive=TRUE )
+print(nwk_trees_ancestral_syl)
+
+results_table_ancestral_syl <- data.frame(Gene = character(),
+                                      Average_Ingroup_Distance = numeric(),
+                                      stringsAsFactors = FALSE)
+
+for (file_path in nwk_trees_ancestral_syl) {
+  
+  
+  file_name <- basename(file_path)
+  
+  gene_name <- gsub("_dS_tree\\.nwk$", "", file_name)
+  
+  tree <- read.tree(file_path)
+  
+  
+  rooted_tree <- root(tree, outgroup = "Tae_gut", resolve.root = TRUE)
+  
+  all_distances <- get_all_distances_to_root(rooted_tree)
+  
+  Ntips <- length(rooted_tree$tip.label)
+  
+  tip_distances <- setNames(all_distances[1:Ntips], rooted_tree$tip.label)
+  
+  ingroup_distances <- tip_distances[names(tip_distances) != "Tae_gut"]
+  
+  mean_ingroup_distance <- mean(ingroup_distances)
+  
+  
+  cat("\n=====================================\n")
+  cat("Processing Gene:", gene_name, "\n")
+  cat("Individual Ingroup Distances:\n")
+  print(ingroup_distances)
+  cat("Average Ingroup Root-to-Tip Distance:", mean_ingroup_distance, "\n")
+  
+  results_table_ancestral_syl <- rbind(results_table_ancestral_syl, data.frame(Gene = gene_name, 
+                                                                       Average_Ingroup_Distance = mean_ingroup_distance))
+}
+
+
+total_average_ancestral_sylv <- mean(results_table_ancestral_syl$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(total_average_ancestral_sylv)
+
+
+#4. DATA FILTERING
+neo_ds_sylviida <- results_table_neo_sylviida$Average_Ingroup_Distance
+
+Q1 <- quantile(neo_ds_sylviida, 0.25)
+Q3 <- quantile(neo_ds_sylviida, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_neo_syl <- results_table_neo_sylviida[
+  results_table_neo_sylviida$Average_Ingroup_Distance >= lower_bound & 
+    results_table_neo_sylviida$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_neo_sylviida <- mean(filtered_results_table_neo_syl$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_neo_sylviida)
+
+#autosomal
+
+autosomal_ds_sylviida <- results_table_autosomal_syl$Average_Ingroup_Distance
+
+Q1 <- quantile(autosomal_ds_sylviida, 0.25)
+Q3 <- quantile(autosomal_ds_sylviida, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+
+filtered_results_table_autosomal_syl <- results_table_autosomal_syl[
+  results_table_autosomal_syl$Average_Ingroup_Distance >= lower_bound & 
+    results_table_autosomal_syl$Average_Ingroup_Distance <= upper_bound, 
+]
+
+filtered_average_autosomal_sylviida <- mean(filtered_results_table_autosomal_syl$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_autosomal_sylviida)
+
+
+
+#ancestral
+
+ancestral_ds_sylviida <- results_table_ancestral_syl$Average_Ingroup_Distance
+
+Q1 <- quantile(ancestral_ds_sylviida, 0.25)
+Q3 <- quantile(ancestral_ds_sylviida, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 -1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+filtered_results_table_ancestral_syl <- results_table_ancestral_syl[
+  results_table_ancestral_syl$Average_Ingroup_Distance >= lower_bound & 
+    results_table_ancestral_syl$Average_Ingroup_Distance <= upper_bound, 
+]
+
+
+filtered_average_ancestral_sylviida <- mean(filtered_results_table_ancestral_syl$Average_Ingroup_Distance, na.rm = TRUE)
+
+cat(filtered_average_ancestral_sylviida)
+```
+
+
+
+
+
+
+## 5. Plotting 
+```{r}
+# 1. COMBINE DATASETS
+combined_data <- bind_rows(
+  
+  "Meliphagidae" = bind_rows(
+    "neo"        = results_table_neo_mel, 
+    "autosomal" = results_table_autosomal_mel, 
+    "ancestral" = results_table_ancestral_mel,
+    .id = "Gene_type"
+  ),
+  "Sylvioidea"     = bind_rows(
+    "neo"        = results_table_neo_sylviida,
+    "autosomal" = results_table_autosomal_syl,
+    "ancestral" = results_table_ancestral_syl,
+    .id = "Gene_type"
+  ),
+  "Psittaciformes" = bind_rows(
+    "neo"          = results_table_neo_parrots,
+    "autosomal"    = results_table_autosomal_parrots,
+    "ancestral"    = results_table_ancestral_parrots,
+    .id = "Gene_type"
+  ),
+  "Threskiornithidae" = bind_rows(
+    "neo"        = results_table_neo_ibis, 
+    "autosomal" = results_table_autosomal_ibis,
+    "ancestral" = results_table_ancestral_ibis,
+    .id = "Gene_type"
+  ),
+  .id = "clade"
+)
+
+
+filter_combined_data <- bind_rows(
+  
+  "Meliphagidae" = bind_rows(
+    "neo"        = filtered_results_table_neo_mel, 
+    "autosomal" = filtered_results_table_autosomal_mel, 
+    "ancestral" = filtered_results_table_ancestral_mel,
+    .id = "Gene_type"
+  ),
+  "Sylvioidea"     = bind_rows(
+    "neo"        = filtered_results_table_neo_syl,
+    "autosomal" = filtered_results_table_autosomal_syl,
+    "ancestral" = filtered_results_table_ancestral_syl,
+    .id = "Gene_type"
+  ),
+  "Psittaciformes" = bind_rows(
+    "neo"          = filtered_results_table_neo_parrots,
+    "autosomal"    = filtered_results_table_autosomal_parrots,
+    "ancestral"    = filtered_results_table_ancestral_parrots,
+    .id = "Gene_type"
+  ),
+  "Threskiornithidae" = bind_rows(
+    "neo"        = filtered_results_table_neo_ibis, 
+    "autosomal" = filtered_results_table_autosomal_ibis,
+    "ancestral" = filtered_results_table_ancestral_ibis,
+    .id = "Gene_type"
+  ),
+  .id = "clade"
+)
+
+#set the order
+filter_combined_data$clade <- factor(filter_combined_data$clade,
+  levels = c("Meliphagidae", "Sylvioidea", "Psittaciformes", "Threskiornithidae"))
+
+# 2. PLOT
+
+
+ggplot(filter_combined_data, aes(x = clade, y = Average_Ingroup_Distance, fill = Gene_type)) +
+  geom_point(aes(color = Gene_type), 
+             position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.75), 
+             alpha = 0.4, size = 1.2, show.legend = FALSE) +
+  geom_boxplot(alpha = 0.6, outlier.shape = 16, outlier.size = 1.5, width = 0.7) +
+  theme_classic() +
+  labs(
+    title = "dS values",
+    x = "Clade",
+    y = "dS"
+  ) +
+  scale_fill_brewer(palette = "Set2", name = NULL, labels = c("Ancestral", "Autosomal", "Neo")) +
+  scale_color_brewer(palette = "Set2") + # Matches the jitter points to the boxes
+  coord_cartesian(ylim = c(0, 0.2)) + 
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold")
+  )
+```
+
+
+
+## 6. Statistical analysis
+```{r}
+# Overall test per clade
+kw <- filter_combined_data %>%
+  group_by(clade) %>%
+  kruskal_test(Average_Ingroup_Distance ~ Gene_type)
+
+# Pairwise comparisons per clade
+pw <- filter_combined_data %>%
+  group_by(clade) %>%
+  wilcox_test(Average_Ingroup_Distance ~ Gene_type, p.adjust.method = "holm")
+```
+
+
+## 7. Plot with statistical significance
+```{r}
+
+# Pairwise tests (as before), plus bracket positions for a dodged boxplot
+pw <- filter_combined_data %>%
+  group_by(clade) %>%
+  wilcox_test(Average_Ingroup_Distance ~ Gene_type, p.adjust.method = "holm") %>%
+  add_xy_position(x = "clade", dodge = 0.75)
+
+ggplot(filter_combined_data, aes(x = clade, y = Average_Ingroup_Distance)) +
+  geom_point(aes(color = Gene_type),
+             position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.75),
+             alpha = 0.4, size = 1.2, show.legend = FALSE) +
+  geom_boxplot(aes(fill = Gene_type), alpha = 0.6, outlier.shape = NA,
+               width = 0.7, position = position_dodge(0.75)) +
+  stat_pvalue_manual(pw, label = "p.adj.signif", hide.ns = TRUE,
+                     tip.length = 0.01, step.increase = 0.03) +
+  theme_classic() +
+  labs(title = "dS values", x = "Clade", y = "dS") +
+  scale_fill_brewer(palette = "Set2", name = NULL,
+                    labels = c("Ancestral", "Autosomal", "Neo")) +
+  scale_color_brewer(palette = "Set2") +
+  coord_cartesian(ylim = c(0, 0.25)) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    axis.text = element_text(size = 11, color = "black"),
+    axis.title = element_text(size = 12, face = "bold")
+  )
+```
+## 8. Save plot
+```{r}
+ggsave("dS_boxplot_w_stats.pdf", width = 10, height = 5)
+```
+
