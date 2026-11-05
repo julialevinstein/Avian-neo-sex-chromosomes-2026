@@ -1,0 +1,98 @@
+---
+title: "dS_dstribution_plot"
+author: "Julia Levinstein"
+date: "2026-11-05"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    highlight: tango
+---
+
+# Script to plot the accumulation of synonymous mutations per time for neo-sex chromosomes
+
+## 1. Configuration
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:/Users/Julia/Desktop/IRT3")
+
+library(readxl)
+library(ggplot2)
+library(ggrepel) 
+library(dplyr)
+```
+
+## 2. Data
+```{r}
+data <- read_excel("C:/Users/Julia/Desktop/IRT3/NR_dataset.xlsx", sheet=1, col_name=TRUE )
+
+
+#transforming data into numeric values
+
+data$neo <- as.numeric(data$neo)
+data$filtered_neo <- as.numeric(data$filtered_neo)
+data$ancestral <- as.numeric(data$ancestral)
+data$filtered_ancestral <- as.numeric(data$filtered_ancestral)
+data$autosomal <- as.numeric(data$autosomal)
+data$filtered_autosomal <- as.numeric(data$filtered_autosomal)
+data$clootl <- as.numeric(data$clootl)
+data$other <- as.numeric(data$other)
+
+
+#filtering out Columbiformes for now
+data_filtered <- data %>%
+  filter(clade != "Columbiformes")
+
+```
+
+## 3. Plot Neo
+```{r}
+ggplot(data_filtered, aes(x=clootl, y=neo, color=clade)) +
+  geom_point(size=3, show.legend = FALSE) +
+  theme_classic() +
+  labs(x= "clade age clootl (MYA)", y= "dS neo-sex genes") +
+  scale_x_continuous(limits = c(0, 70), breaks = seq(0, 70, by =5)) +
+  scale_y_continuous(limits = c(0, 0.09), breaks = seq(0,0.09, by=0.01)) +
+  geom_text_repel(aes(label=clade), box.padding = 0.2, max.overlaps = Inf, segment.color =NA, show.legend=FALSE) #avoids overlapping when adding the label on the geom_point
+```
+
+
+## Save plot
+```{r}
+ggsave("dS_neo_distribution.pdf", width = 6, height = 5)
+```
+
+
+## 4. Plot filtered Neo
+```{r}
+ggplot(data_filtered, aes(x=clootl, y=filtered_neo, color=clade)) +
+  geom_point(size=3, show.legend = FALSE) +
+  theme_classic() +
+  labs(x= "clade age clootl (MYA)", y= "dS neo-sex genes") +
+  scale_x_continuous(limits = c(0, 70), breaks = seq(0, 70, by =5)) +
+  scale_y_continuous(limits = c(0, 0.09), breaks = seq(0,0.09, by=0.01)) +
+  geom_text_repel(aes(label=clade), box.padding = 0.5, max.overlaps = Inf, segment.color =NA, show.legend=FALSE)
+```
+
+## Save plot
+```{r}
+ggsave("dS_filtered_neo_distribution.pdf", width = 6, height = 5)
+```
+
+## 5. Eocene hypothesis for Sylvioidea 
+```{r}
+ggplot(data_filtered, aes(x=other, y=neo, color=clade)) +
+  geom_point(size=3, show.legend = FALSE) +
+  theme_classic() +
+  labs(x= "clade age", y= "neo dS rate") +
+  scale_x_continuous(limits = c(0, 70), breaks = seq(0, 70, by =5)) +
+  scale_y_continuous(limits = c(0, 0.09), breaks = seq(0,0.09, by=0.01)) +
+  geom_text_repel(aes(label=clade), box.padding = 0.2, max.overlaps = Inf, segment.color =NA, show.legend=FALSE) #avoids overlapping when adding the label on the geom_point 
+
+```
+
+## Save plot
+```{r}
+ggsave("dS_eocene_Sylvioidea_distribution.pdf", width = 6, height = 5)
+```
+
